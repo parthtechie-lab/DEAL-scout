@@ -1,172 +1,155 @@
 # 🛒 Deal Scout v2 — ₹0 Automated Deal Tracker
 
-An advanced, automated personal deal tracking engine for **India** running entirely on GitHub Actions — no server, no cost, no idle billing.
+An automated personal deal tracking engine for **India** that monitors Telegram deal channels, Indian subreddits, and coupon aggregators, then sends alerts directly to your Telegram DM.
 
-Version 2 introduces a **6-stage detection pipeline**, **priority scoring engine**, **cross-channel fuzzy deduplication**, and an **instant coupon detector** that catches food and grocery codes within minutes of them going live.
-
----
-
-## ✨ Features (v2)
-
-### 1. 🎟️ Instant Coupon Detector (15-min cron)
-Detects NEW coupon codes the moment they drop for Swiggy, Zomato, Blinkit, Zepto, BigBasket, and Dominos. 
-* **Layer A:** Regex scrapes 9 major coupon aggregators (GrabOn, DesiDime, CashKaro, Zoutons, etc.).
-* **Layer B:** Direct checks of official platform offer pages (e.g., Dominos).
-* **Layer C:** Live Telegram web preview parsing (finds codes posted by humans *without* needing a Telethon session).
-* **Result:** Fires alerts instantly, often before the coupon limits are exhausted.
-
-### 2. 📱 Telegram Deal Channel Monitor
-Monitors 16+ verified deal channels using a personal Telegram account (Telethon).
-* Filters out the noise using a 3-layer match: Product Keyword → Food Platform → Category.
-* Extracts the deal price, MRP, discount percentage, and coupon codes from the raw text.
-
-### 3. 🤖 Reddit Deal Scanner
-Monitors Indian subreddits (`r/dealsforindia`, `r/GreatIndiaDeals`, etc.) using the public Reddit JSON API. 
-* Avoids spam by applying strict reliability scoring and minimum upvote thresholds.
-
-### 4. 📊 Price Tracker & 90-Day History (Amazon/Flipkart)
-Uses Playwright to scrape the exact prices of products on your personal watchlist.
-* Defeats the "Fake Sale" trick: Compares the live price against a true **90-day SQLite history** to ensure the discount is real.
-
-### 5. 🍕 Deep Food Coupon Scraper
-A secondary Playwright scraper that performs a deep DOM-parse on 15 aggregator websites across 7 food platforms, finding hidden or JavaScript-rendered coupons.
-
-### 6. 🏦 Weekly Bank Card Offers Check
-Checks 10 major Indian banks (HDFC, ICICI, SBI, Axis, Kotak, Amex, Yes Bank, IDFC, RBL, BoB) for changing credit/debit card offers across your tracked categories.
-
-### 🧠 The "Matcher" Engine & Database
-* **Priority Scoring:** Every detected deal gets a score (0-100) based on `discount_percentage`, `source_reliability`, `keyword_match_count`, and `price_below_target`. Deals scoring < 40 are silently dropped.
-* **Cross-Channel Fuzzy Deduplication:** If Telegram, Reddit, and a coupon site all post the same deal, the `rapidfuzz` string matcher catches it and ensures you only get **one** alert. (12-hour rolling window).
-* **Quiet Hours:** Suppresses non-critical alerts between 22:00 and 08:00 IST to prevent midnight spam.
+Runs entirely on GitHub Actions. No server. No idle billing.
 
 ---
 
-## 🏷️ 13 Categories Tracked
-Track exactly what you care about. Default categories include:
-1. `electronics` (Phones, Laptops, Earbuds)
-2. `electrical` (Inverters, Fans, Plugs)
-3. `food` (Grocery, Delivery, Spices)
-4. `sports` (Gym, Supplements, Gear)
-5. `fashion` (Clothes, Shoes, Watches)
-6. `beauty` (Makeup, Skincare, Grooming)
-7. `home_kitchen` (Cookware, Decor, Furniture)
-8. `appliances` (ACs, Fridges, Washing Machines)
-9. `mobiles` (Smartphones, Cases, Screen Protectors)
-10. `baby_kids` (Toys, Diapers, Clothing)
-11. `books_stationery` (Books, Pens, Office Supplies)
-12. `travel` (Flights, Hotels, Luggage)
-13. `general` (Gift Cards, OTT Subscriptions)
+## ⚠️ Honest Limitations (Read Before You Use)
+
+Before getting to the features, here's what this system **cannot** do:
+
+| Limitation | Reality |
+|---|---|
+| **Flash coupons (< 5 min)** | GitHub Actions has ~40-90s startup latency. By the time the first HTTP request goes out, a viral "first 100 users" coupon is already dead. This system catches codes that last **1-24 hours**. |
+| **Amazon/Flipkart price scraping** | Shared GitHub Actions IPs are flagged by Amazon's bot detection. Playwright scraping works locally but will return CAPTCHAs on CI within a few runs. Price tracking is therefore a **manual/local-only** feature. |
+| **Cloudflare-protected aggregators** | GrabOn, DesiDime HTML pages, CashKaro, and Zoutons sit behind Cloudflare JS challenges. Scraping them from CI IPs returns an empty challenge page. This system uses only sources that serve plain content without JS rendering. |
+| **Telegram account safety** | Telethon uses your personal account credentials. Running it for personal watchlist scraping is a grey area in Telegram's ToS. Use a dedicated secondary number, not your primary. The session can expire or get flagged. |
+| **Git history & SQLite** | The deals database is stored in the **Actions cache**, NOT committed to git on every run. Committing a binary `.db` file every 30 minutes would balloon your repo into hundreds of MB within weeks. |
+| **Bank offer scraping** | Bank offer pages (HDFC, ICICI, SBI) are JS-heavy with iframes and session tokens. This system does a keyword-match on whatever plain text loads — treat alerts as "worth checking manually," not confirmed offers. |
 
 ---
 
-## 🔔 Rich Telegram Alerts
+## What It Actually Does Well
 
-Deal Scout sends beautifully formatted alerts directly to your Telegram DM, complete with priority badges and actionable stacking tips.
-
-```text
-🎟️ NEW COUPON DETECTED — Zomato!
-━━━━━━━━━━━━━━━━━━
-🍕 Platform: Zomato
-🔑 Code: WELCOME200
-💰 Flat ₹200 off on first 3 orders
-📍 Source: GrabOn
-💡 Pro tip: Zomato Gold + HDFC Diners Club (5X rewards) + this coupon code
-
-✅ How to use:
-1. Open Zomato app
-2. Add items to cart
-3. Apply code: WELCOME200
-4. Pay with bank card for max savings
-
-⚡ Act fast — codes expire quickly!
-```
+- ✅ **Monitors 16+ Telegram deal channels** in real-time (Telethon, no scraping — direct API access)
+- ✅ **Detects coupon codes** from CF-free aggregators (DesiDime RSS, Hutti, Couponzania, Dealsmagnet) and official platform pages (Dominos)
+- ✅ **Scans Indian Reddit deal subs** via the public `.json` API (no auth required)
+- ✅ **Deduplicates** across all sources using fuzzy matching — one alert per deal, not ten
+- ✅ **Suppresses alerts** 22:00–08:00 IST (quiet hours)
+- ✅ **Sends failure alerts** to your Telegram if a run crashes silently
+- ✅ **Zero cost** if the repo is public (Actions minutes unlimited)
 
 ---
 
-## ⚙️ How It Works (GitHub Actions Architecture)
+## Architecture
 
 ```
 GitHub Actions Schedule
-   ↓
-- Every 15 mins: Runs Instant Coupon Detector (Pure Python, finishes in 10s)
-- Every 30 mins: Runs Full Pipeline (Telegram + Reddit + Deep Scrapers)
-- Weekly (Mon): Runs Bank Card Offer Check
-   ↓
-Spins up Ubuntu Container
-   ↓
-Python executes scrapers, runs data through `matcher.py` (Scoring & Dedup)
-   ↓
-Valid deals sent via Telegram Bot API
-   ↓
-SQLite `deals.db` (History + Dedup Log) is committed back to the repo
-   ↓
-Container destroys itself
+│
+├── Every 15 min → Coupon Detector (~30s, pure Python, no browser)
+│     └── Checks DesiDime RSS + Hutti + Couponzania + Dominos direct page
+│         + Telegram public channel web previews
+│
+├── Every 60 min → Full Scan (~3-4 min, no Playwright)
+│     ├── Telegram channel monitor (Telethon direct API)
+│     ├── Reddit subreddit scanner (public JSON API)
+│     └── Coupon detector (same as above)
+│
+├── Monday 03:00 UTC → Bank offer keyword check (10 banks)
+│
+└── Manual trigger (workflow_dispatch) → Full scan + optional Playwright
+      ├── Price tracker (Amazon/Flipkart — only works locally/with proxies)
+      └── Deep food coupon scraper (15 aggregators × 7 platforms, Playwright)
+
+DB: SQLite, stored in GitHub Actions cache (NOT committed to git)
+Alerts: Telegram Bot API (your personal DM)
 ```
 
 ---
 
-## 🚀 Setup (One-Time, ~15 mins)
+## GitHub Actions Minutes (Honest Calculation)
 
-### 1. Fork / Clone this repo
+| Run type | Frequency | Duration | Min/day |
+|---|---|---|---|
+| Coupon scan | 96×/day (15-min) | ~30s | ~48 min |
+| Full scan | 24×/day (hourly) | ~3-4 min | ~90 min |
+| Bank check | 1×/week | ~2 min | negligible |
+| **Total/month** | | | **~4,100 min** |
 
-### 2. Get your credentials
+- **Public repo** → unlimited free minutes ✅
+- **Private repo** → 2,000 min/month free. You'll exceed it. Either make the repo public, or reduce full scan to every 2 hours (~2,900 min/month — just under limit).
+
+---
+
+## 13 Categories Tracked
+
+Electronics, Electrical, Food & Delivery, Sports & Gym, Fashion, Beauty, Home & Kitchen, Appliances, Mobiles, Baby & Kids, Books, Travel, General. All configurable in `watchlist.json`.
+
+---
+
+## Platforms with Coupon Detection
+
+| Platform | Sources |
+|---|---|
+| 🛵 Swiggy | DesiDime RSS, Hutti, Couponzania, Telegram channels |
+| 🍕 Zomato | DesiDime RSS, Hutti, Couponzania, Telegram channels |
+| ⚡ Blinkit | DesiDime RSS, Couponzania, Telegram channels |
+| 🟣 Zepto | DesiDime RSS, Hutti, Telegram channels |
+| 🛒 BigBasket | DesiDime RSS, Hutti, Telegram channels |
+| 🍕 Dominos | DesiDime RSS, Official offer page (co.in), Telegram channels |
+| 📦 Swiggy Instamart | DesiDime RSS, Telegram channels |
+
+---
+
+## Alert Format
+
+```
+🎟️ COUPON DETECTED — Zomato
+━━━━━━━━━━━━━━━━━━
+🍕 Platform: Zomato
+🔑 Code: WELCOME200
+💰 Flat ₹200 off on orders above ₹399
+📍 Source: DesiDime
+💡 Stack it: Zomato Gold + HDFC Diners Club (5X rewards) + this coupon code
+
+✅ Open app → Cart → Apply → Pay with bank card
+⚡ Verify the code is still valid before ordering.
+```
+
+---
+
+## Setup
+
+### 1. Fork / Clone this repo (recommend: make it public)
+
+### 2. Get credentials
 
 | Credential | Where to get it |
 |---|---|
-| `TELEGRAM_BOT_TOKEN` | Message `@BotFather` on Telegram → `/newbot` |
-| `TELEGRAM_CHAT_ID` | Message `@userinfobot` on Telegram |
+| `TELEGRAM_BOT_TOKEN` | `@BotFather` on Telegram → `/newbot` |
+| `TELEGRAM_CHAT_ID` | `@userinfobot` on Telegram |
 | `TELEGRAM_API_ID` + `TELEGRAM_API_HASH` | [my.telegram.org](https://my.telegram.org) → API Dev Tools |
-| `TELEGRAM_SESSION` | Run `python scripts/generate_session.py` locally (see below) |
+| `TELEGRAM_SESSION` | `python scripts/generate_session.py` (one-time, needs phone OTP) |
 
-### 3. Generate your Telegram session string
+### 3. Generate Telegram session (local, one-time)
 
 ```bash
-# Clone the repo, setup virtualenv, install deps
-python3 -m venv .venv
-source .venv/bin/activate
+python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-
-# Copy env template
-cp .env.example .env
-# Fill in TELEGRAM_API_ID and TELEGRAM_API_HASH in .env
-
-# Generate session (one-time, interactive — needs your phone OTP)
+cp .env.example .env   # fill in API_ID and API_HASH
 python scripts/generate_session.py
-# → Prints a long session string. Copy it.
+# Copy the printed session string
 ```
 
 ### 4. Add GitHub Secrets
 
-Go to your repo → **Settings → Secrets and variables → Actions → New repository secret**
+Repo → **Settings → Secrets → Actions → New secret**:
+`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`, `TELEGRAM_SESSION`
 
-Add each of: 
-* `TELEGRAM_BOT_TOKEN`
-* `TELEGRAM_CHAT_ID`
-* `TELEGRAM_API_ID`
-* `TELEGRAM_API_HASH`
-* `TELEGRAM_SESSION`
+### 5. Customise `watchlist.json`
 
-### 5. Customise your watchlist
+- `telegram_channels` — add/remove channels, set `reliability_score` (1-10)
+- `products` — product name, keywords, URL, `target_price`, category
+- `reddit_subreddits` — add/remove subs with reliability scores
+- `matching_rules` — tune scoring weights, quiet hours, dedup window
+- `food_platforms` — custom stacking tips per platform
 
-Edit [`watchlist.json`](watchlist.json). This is the brain of the operation. You can configure:
-- `telegram_channels`: Add/remove channels and assign a `reliability_score` (1-10).
-- `reddit_subreddits`: Track specific Indian subreddits.
-- `products`: Exact Amazon/Flipkart links for price tracking, with `target_price`.
-- `matching_rules`: Tune the priority scoring weights, quiet hours, and dedup windows.
-- `food_platforms`: Add custom stacking tips for Swiggy, Zepto, etc.
+### 6. Push and enable Actions
 
-### 6. Push & Enable Actions
-
-Push your changes to GitHub. Go to the **Actions** tab in your repository and enable workflows.  
-The system will now run autonomously.
+Go to the **Actions** tab → enable workflows. The system runs automatically.
 
 ---
 
-## 💸 Free Tier Notes
-
-- **GitHub Actions**: 2000 min/month on private repos. Running every 30 mins + 15 min coupon scans uses roughly ~1200 mins/month. (Completely free and unlimited if the repo is public).
-- **Telegram Bot API**: Free.
-- **Telethon**: Free (uses your account).
-- **SQLite Database**: Stored natively in the repo, costs ₹0.
-
-**Total monthly cost: ₹0**
+## Total Monthly Cost: ₹0 (public repo)
