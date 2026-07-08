@@ -1,32 +1,151 @@
 {
   "telegram_channels": [
-    "@Flipshope",
-    "@TrickXpert",
-    "@tech24deals",
-    "@CoolzTricks",
+    "@desidime",
+    "@desidimehot",
     "@GrabOnIndiaOfficial",
-    "@DesiDimeDeals",
-    "@lootdealsindia",
-    "@SwiggyZomatoOffers",
-    "@ZeptoBlinkitDeals"
+    "@icoolzTricks",
+    "@idoffers",
+    "@gopaisadeals",
+    "@bigtricksin",
+    "@Earticledeal",
+    "@foodcoupon",
+    "@foodielooters",
+    "@Extrape",
+    "@hotofferme",
+    "@tech24deals",
+    "@TrickXpert",
+    "@Flipshope",
+    "@realearnkaro"
   ],
+
   "coupon_sites": [
     {
-      "name": "CouponDunia",
-      "url": "https://www.coupondunia.in",
+      "name": "DesiDime",
+      "base_url": "https://www.desidime.com/stores",
+      "url_pattern": "{base_url}/{platform}-coupons",
       "categories": ["electronics", "food", "sports", "electrical"]
     },
     {
       "name": "GrabOn",
-      "url": "https://www.grabon.in",
+      "base_url": "https://www.grabon.in",
+      "url_pattern": "{base_url}/{platform}-coupons/",
       "categories": ["electronics", "food", "sports", "electrical"]
     },
     {
       "name": "CashKaro",
-      "url": "https://cashkaro.com",
+      "base_url": "https://cashkaro.com",
+      "url_pattern": "{base_url}/{platform}-coupons",
+      "categories": ["electronics", "food", "sports", "electrical"]
+    },
+    {
+      "name": "Zoutons",
+      "base_url": "https://zoutons.com",
+      "url_pattern": "{base_url}/{platform}-coupons",
+      "categories": ["electronics", "food", "sports", "electrical"]
+    },
+    {
+      "name": "CouponDunia",
+      "base_url": "https://www.coupondunia.in",
+      "url_pattern": "{base_url}/{platform}-coupons",
+      "categories": ["electronics", "food", "sports", "electrical"]
+    },
+    {
+      "name": "FreeKaaMaal",
+      "base_url": "https://www.freekaamaal.com",
+      "url_pattern": "{base_url}/{platform}-coupons",
+      "categories": ["electronics", "food", "sports", "electrical"]
+    },
+    {
+      "name": "IndiaDesire",
+      "base_url": "https://indiadesire.com",
+      "url_pattern": "{base_url}/{platform}-coupons",
+      "categories": ["electronics", "food", "sports", "electrical"]
+    },
+    {
+      "name": "GoPaisa",
+      "base_url": "https://www.gopaisa.com/stores",
+      "url_pattern": "{base_url}/{platform}-coupons",
+      "categories": ["electronics", "food", "sports", "electrical"]
+    },
+    {
+      "name": "Picodi",
+      "base_url": "https://www.picodi.com/in",
+      "url_pattern": "{base_url}/{platform}",
+      "categories": ["electronics", "food", "sports", "electrical"]
+    },
+    {
+      "name": "CouponZania",
+      "base_url": "https://couponzania.com",
+      "url_pattern": "{base_url}/{platform}-coupons",
+      "categories": ["electronics", "food", "sports", "electrical"]
+    },
+    {
+      "name": "Hutti",
+      "base_url": "https://hutti.in",
+      "url_pattern": "{base_url}/{platform}-coupons",
+      "categories": ["food"]
+    },
+    {
+      "name": "Dealsmagnet",
+      "base_url": "https://dealsmagnet.com",
+      "url_pattern": "{base_url}/{platform}-coupons",
       "categories": ["electronics", "food", "sports", "electrical"]
     }
   ],
+
+  "food_platforms": [
+    {
+      "name": "Swiggy",
+      "slug": "swiggy",
+      "emoji": "🛵",
+      "stacking_tip": "Use Swiggy One membership + HDFC Swiggy card (10% cashback) + buy Swiggy gift cards from HDFC SmartBuy for triple savings"
+    },
+    {
+      "name": "Zomato",
+      "slug": "zomato",
+      "emoji": "🍕",
+      "stacking_tip": "Use Zomato Gold + HDFC Diners Club (5X rewards) + discounted gift cards from Zingoy for triple savings"
+    },
+    {
+      "name": "Blinkit",
+      "slug": "blinkit",
+      "emoji": "⚡",
+      "stacking_tip": "Use Zomato Gold (includes Blinkit free delivery) + bank UPI offers + in-app 'Maha Value' deals"
+    },
+    {
+      "name": "Zepto",
+      "slug": "zepto",
+      "emoji": "🟣",
+      "stacking_tip": "Use Zepto Pass + bank card offer + check 'Super Saver' section for hidden bundle deals"
+    },
+    {
+      "name": "BigBasket",
+      "slug": "bigbasket",
+      "emoji": "🛒",
+      "stacking_tip": "Use BB Star membership + Paytm wallet cashback + 'Smart Basket' auto-discounts for bulk savings"
+    },
+    {
+      "name": "Dominos",
+      "slug": "dominos",
+      "emoji": "🍕",
+      "stacking_tip": "Use 'Everyday Value' menu + coupon code + HDFC/SBI card offer — stack all three at checkout"
+    },
+    {
+      "name": "Swiggy Instamart",
+      "slug": "swiggy-instamart",
+      "emoji": "📦",
+      "stacking_tip": "Use Swiggy One + Instamart-specific coupon codes + bank card discount"
+    }
+  ],
+
+  "reddit_subreddits": [
+    "dealsforindia",
+    "GreatIndiaDeals",
+    "Lootdealsforindia",
+    "indianshoppingdeals",
+    "IndiaCoupon"
+  ],
+
   "products": [
     {
       "name": "boAt Rockerz 450 Bluetooth Headphone",
@@ -141,17 +260,20 @@
       "category": "sports"
     }
   ],
+
   "category_keywords": {
     "electronics": [
       "earphone", "earbuds", "headphone", "speaker", "bluetooth", "TWS",
       "mobile", "phone", "charger", "power bank", "laptop", "tablet",
       "smartwatch", "LED TV", "router", "wifi", "camera", "pen drive",
-      "hard disk", "SSD", "keyboard", "mouse", "monitor", "webcam"
+      "hard disk", "SSD", "keyboard", "mouse", "monitor", "webcam",
+      "gaming", "controller", "console", "trimmer", "drone", "projector"
     ],
     "electrical": [
       "LED bulb", "tube light", "extension cord", "power strip", "switch",
       "socket", "MCB", "inverter", "UPS", "stabilizer", "electric fan",
-      "ceiling fan", "wiring", "cable", "wire", "regulator", "dimmer"
+      "ceiling fan", "wiring", "cable", "wire", "regulator", "dimmer",
+      "geyser", "water heater", "iron", "mixer", "grinder", "induction"
     ],
     "food": [
       "dal", "oil", "ghee", "rice", "atta", "flour", "spice", "masala",
@@ -162,15 +284,36 @@
       "instamart", "dunzo", "grocery", "food delivery", "order food",
       "free delivery", "flat off food", "restaurant", "pizza", "burger",
       "biryani", "thali", "meal", "combo", "lunch", "dinner", "breakfast",
-      "swiggy one", "zomato gold", "pro membership"
+      "swiggy one", "zomato gold", "pro membership",
+      "faasos", "ovenstory", "behrouz", "pizza hut", "kfc", "mcdonald",
+      "burger king", "subway", "haldiram", "pantry", "groceries",
+      "fruits", "vegetables", "meat", "chicken", "fish", "eggs", "dairy",
+      "milk", "bread", "butter", "cheese", "ice cream", "frozen"
     ],
     "sports": [
       "cricket bat", "cricket ball", "football", "badminton", "shuttle",
       "yoga mat", "gym gloves", "resistance band", "dumbbell", "kettlebell",
       "treadmill", "cycle", "bicycle", "skipping rope", "sports shoes",
-      "jersey", "shorts", "gym wear", "protein", "whey", "fitness"
+      "jersey", "shorts", "gym wear", "protein", "whey", "fitness",
+      "running shoes", "tennis", "table tennis", "swimming", "skating",
+      "boxing gloves", "punch bag", "pull up bar", "ab roller"
     ]
   },
+
+  "deal_signal_words": [
+    "%", "off", "discount", "coupon", "promo", "cashback", "deal",
+    "offer", "sale", "loot", "flat", "rs.", "₹", "free", "lowest",
+    "price drop", "bank offer", "extra", "flash", "limited", "today only",
+    "steal", "price error", "glitch", "lowest ever", "all time low",
+    "clearance", "bumper", "mega", "super", "buy 1 get 1", "bogo",
+    "b1g1", "buy one get one", "combo offer", "bundle", "voucher",
+    "gift card", "recharge", "min order", "no minimum", "first order",
+    "new user", "signup", "referral", "invite code", "exclusive",
+    "60% off", "70% off", "80% off", "90% off", "95% off", "99% off",
+    "₹1 deal", "₹9 deal", "₹29", "₹49", "₹99", "almost free",
+    "maha loot", "biggest sale", "festival offer"
+  ],
+
   "bank_offer_pages": [
     {
       "bank": "HDFC",
@@ -187,6 +330,10 @@
     {
       "bank": "Kotak",
       "url": "https://www.kotak.com/en/personal-banking/cards/credit-cards/credit-card-offers.html"
+    },
+    {
+      "bank": "Axis",
+      "url": "https://www.axisbank.com/grab-deals/offers"
     }
   ]
 }
