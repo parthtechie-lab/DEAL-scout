@@ -1,12 +1,8 @@
 {
   "telegram_channels": [
-    "@IndiaDesire",
-    "@GoPaisa",
     "@Flipshope",
     "@TrickXpert",
-    "@tech24deals",
-    "@IndiaFreeStuff",
-    "@grabon"
+    "@tech24deals"
   ],
   "coupon_sites": [
     {
