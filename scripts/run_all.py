@@ -10,7 +10,13 @@ import os
 from db import init_db
 
 import telegram_monitor
-import price_checker
+try:
+    import price_checker
+    HAS_PRICE_CHECKER = True
+except ModuleNotFoundError:
+    print("[run_all] Warning: price_checker could not be loaded (likely missing Playwright). Skipping price checks.")
+    HAS_PRICE_CHECKER = False
+
 import bank_offers
 import asyncio
 
@@ -26,11 +32,14 @@ def main():
     except Exception as e:
         print(f"[run_all] Telegram check failed: {e}")
 
-    print("[run_all] Checking prices...")
-    try:
-        price_checker.run()
-    except Exception as e:
-        print(f"[run_all] Price check failed: {e}")
+    if HAS_PRICE_CHECKER:
+        print("[run_all] Checking prices...")
+        try:
+            price_checker.run()
+        except Exception as e:
+            print(f"[run_all] Price check failed: {e}")
+    else:
+        print("[run_all] Skipping price check (module unavailable).")
 
     if RUN_BANK_CHECK:
         print("[run_all] Checking bank offers...")

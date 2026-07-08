@@ -1,17 +1,12 @@
 {
   "telegram_channels": [
-    "@lootdeals",
-    "@dealsninja",
-    "@DealsDhamaka",
-    "@Lootoffer",
-    "@BudgetBuys",
-    "@TechDealsIndia",
-    "@flipkartoffers",
-    "@AmazonOffersIndia",
-    "@DealHunterIndia",
-    "@meeshooffers",
-    "@electronicdealsindiaofficial",
-    "@sportsgeardeals"
+    "@IndiaDesire",
+    "@GoPaisa",
+    "@Flipshope",
+    "@TrickXpert",
+    "@tech24deals",
+    "@IndiaFreeStuff",
+    "@grabon"
   ],
   "coupon_sites": [
     {

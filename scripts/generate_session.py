@@ -23,7 +23,12 @@ load_dotenv()
 API_ID = os.getenv("TELEGRAM_API_ID") or input("Enter your API_ID: ")
 API_HASH = os.getenv("TELEGRAM_API_HASH") or input("Enter your API_HASH: ")
 
-with TelegramClient(StringSession(), int(API_ID), API_HASH) as client:
+import asyncio
+loop = asyncio.new_event_loop()
+asyncio.set_event_loop(loop)
+
+with TelegramClient(StringSession(), int(API_ID), API_HASH, loop=loop) as client:
+    client.start(phone="+919770108442")
     session_string = client.session.save()
     print("\n=== COPY THIS INTO .env as TELEGRAM_SESSION and into your GitHub Secret ===\n")
     print(session_string)
