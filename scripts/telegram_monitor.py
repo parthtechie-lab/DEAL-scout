@@ -26,12 +26,12 @@ from dotenv import load_dotenv
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 
-from db import already_alerted, mark_alerted, get_recent_deal_titles, record_deal_title
+from db import already_alerted, mark_alerted, get_recent_deal_titles, record_deal_title, record_source_match, record_source_miss
 from notifier import send_deal_alert, send_alert
 from matcher import (
     extract_deal_info, score_deal, priority_badge,
     detect_food_platforms, deduplicate_title,
-    CATEGORY_EMOJI,
+    load_weights, CATEGORY_EMOJI,
 )
 
 load_dotenv()
@@ -79,7 +79,7 @@ async def scan_channels():
     min_reliability = rules.get("min_reliability_score", 5)
     min_score       = rules.get("min_priority_score_to_alert", 40)
     dedup_hours     = rules.get("dedup_window_hours", 6)
-    weights         = rules.get("priority_weights", None)
+    weights         = load_weights(watchlist)   # always from watchlist, not hardcoded
 
     # Support both old string-list format and new object format
     channels = []
@@ -158,7 +158,11 @@ async def scan_channels():
                     if p_score < min_score:
                         continue
 
-                    # Cross-channel fuzzy dedup
+                    # Code-based dedup: same coupon code from any source
+                    if coupon and already_alerted(f"code:product:{product['name']}:{coupon}"):
+                        continue
+
+                    # Cross-channel fuzzy title dedup
                     deal_title = f"{product['name']} {handle}"
                     if deduplicate_title(deal_title, recent_titles):
                         continue
@@ -185,6 +189,9 @@ async def scan_channels():
                                      priority_score=p_score, discount_percent=disc_pct or 0,
                                      source_reliability=reliability,
                                      category=product.get("category", ""))
+                        if coupon:
+                            mark_alerted(f"code:product:{product['name']}:{coupon}",
+                                         product["name"], price or 0)
                         record_deal_title(deal_title, handle)
                         recent_titles.append(deal_title)
                         total_alerts += 1
@@ -279,6 +286,12 @@ async def scan_channels():
                             total_alerts += 1
 
             channels_ok += 1
+            if msg_count > 0:
+                # Only call match/miss if we actually got messages from the channel
+                if total_alerts > 0:
+                    record_source_match(handle, source_type="telegram")
+                else:
+                    record_source_miss(handle, source_type="telegram")
             print(f"[telegram_monitor] {handle}: scanned {msg_count} messages")
 
         except Exception as e:

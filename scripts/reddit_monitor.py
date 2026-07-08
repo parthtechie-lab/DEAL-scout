@@ -22,12 +22,12 @@ from pathlib import Path
 import requests
 from dotenv import load_dotenv
 
-from db import already_alerted, mark_alerted, get_recent_deal_titles, record_deal_title
+from db import already_alerted, mark_alerted, get_recent_deal_titles, record_deal_title, record_source_match, record_source_miss
 from notifier import send_deal_alert
 from matcher import (
     extract_deal_info, score_deal,
     detect_food_platforms, deduplicate_title,
-    CATEGORY_EMOJI,
+    load_weights, CATEGORY_EMOJI,
 )
 
 load_dotenv()
@@ -96,7 +96,7 @@ def run():
     min_reliability = rules.get("min_reliability_score", 5)
     min_score       = rules.get("min_priority_score_to_alert", 40)
     dedup_hours     = rules.get("dedup_window_hours", 6)
-    weights         = rules.get("priority_weights", None)
+    weights         = load_weights(watchlist)  # wired from watchlist, not hardcoded
 
     # Support both old string-list and new object format
     subreddits = []
@@ -128,6 +128,7 @@ def run():
     for sub in subreddits:
         sub_name    = sub["name"] if isinstance(sub, dict) else sub
         reliability = sub.get("reliability_score", 6) if isinstance(sub, dict) else 6
+        sub_alerts  = 0  # track per-sub alerts for staleness recording
 
         print(f"[reddit] Scanning r/{sub_name}...")
         posts = fetch_subreddit_posts(sub_name)
@@ -270,6 +271,13 @@ def run():
                                     record_deal_title(deal_title, f"reddit:{sub_name}")
                                     recent_titles.append(deal_title)
                                     total_alerts += 1
+                                    sub_alerts   += 1
+
+        # Record staleness data per subreddit
+        if sub_alerts > 0:
+            record_source_match(f"reddit:r/{sub_name}", source_type="reddit")
+        else:
+            record_source_miss(f"reddit:r/{sub_name}", source_type="reddit")
 
         time.sleep(2)  # Be polite to Reddit
 

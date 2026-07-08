@@ -45,8 +45,10 @@ jobs:
           python-version: "3.11"
 
       # ── Restore DB from cache (avoids binary blobs in git history) ──────────
+      # Uses restore-only action so we control the save step explicitly.
       - name: Restore deal database from cache
-        uses: actions/cache@v4
+        id: cache-db-restore
+        uses: actions/cache/restore@v4
         with:
           path: data/deals.db
           key: deals-db-${{ github.run_id }}
@@ -54,7 +56,7 @@ jobs:
             deals-db-
 
       - name: Install dependencies (no Playwright for scheduled runs)
-        run: pip install -r requirements.txt
+        run: pip install -r requirements.txt pytest
 
       - name: Install Playwright (manual trigger only)
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.run_playwright == 'true'
@@ -151,7 +153,20 @@ jobs:
           )
           "
 
-      # ── Save DB back to cache ────────────────────────────────────────────────
-      # DB is cached, not committed. This keeps git history clean.
-      # The cache key includes run_id so each run saves its own snapshot.
-      # actions/cache@v4 automatically restores from the most recent matching key.
+      # ── Explicit DB cache save ────────────────────────────────────────────────
+      # Explicit save (not implicit post-job) so we can verify it actually runs.
+      # Key is unique per run_id; restore-keys prefix match finds the latest.
+      # Cache eviction: GitHub LRU, 10GB/repo limit, 7-day unused expiry.
+      # If the cache is evicted, dedup resets — you'll see duplicate alerts for
+      # one run, then it self-heals as the new DB accumulates history.
+      - name: Save deal database to cache
+        if: always()   # Save even if a step failed, to preserve partial dedup state
+        uses: actions/cache/save@v4
+        with:
+          path: data/deals.db
+          key: deals-db-${{ github.run_id }}
+
+      # ── Run tests on every push ──────────────────────────────────────────────
+      - name: Run pytest
+        if: github.event_name == 'push'
+        run: pytest tests/ -v --tb=short
