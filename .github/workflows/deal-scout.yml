@@ -13,6 +13,9 @@ name: Deal Scout v2
 # It is only available on `workflow_dispatch` (manual trigger) to keep minutes low.
 
 on:
+  push:
+    branches:
+      - main
   schedule:
     # Coupon-only scan every 15 minutes (pure Python, ~30 sec per run)
     - cron: "*/15 * * * *"
