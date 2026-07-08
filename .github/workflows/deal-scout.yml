@@ -4,9 +4,9 @@ on:
   schedule:
     # Every 90 minutes. Kept below 60-min to reduce ban risk and stay well
     # within GitHub's free Actions minutes (2000/month private repo).
-    # Cron is in UTC; 90 min doesn't divide evenly into hours so this runs
-    # at :00 and :30 alternating hours — close enough for this use case.
-    - cron: "0 */1 * * *"     # hourly Telegram + price check
+    # GitHub Actions is completely free for public repositories, so running every
+    # 30 minutes will not cost anything and gives you faster alerts!
+    - cron: "*/30 * * * *"    # Runs every 30 minutes
     - cron: "0 3 * * 1"       # weekly bank offer check, Monday 03:00 UTC
   workflow_dispatch: {}        # lets you trigger a run manually from GitHub UI
 
