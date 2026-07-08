@@ -1,17 +1,17 @@
-name: Deal Scout
+name: Deal Scout v2
 
 on:
   schedule:
-    # Every 90 minutes. Kept below 60-min to reduce ban risk and stay well
-    # within GitHub's free Actions minutes (2000/month private repo).
-    # GitHub Actions is completely free for public repositories, so running every
-    # 30 minutes will not cost anything and gives you faster alerts!
-    - cron: "*/30 * * * *"    # Runs every 30 minutes
-    - cron: "0 3 * * 1"       # weekly bank offer check, Monday 03:00 UTC
-  workflow_dispatch: {}        # lets you trigger a run manually from GitHub UI
+    # Full scan every 30 minutes (Telegram + Reddit + Coupon + Food scrape)
+    - cron: "*/30 * * * *"
+    # INSTANT coupon-only scan every 15 minutes (Swiggy/Zomato/Blinkit/Zepto/Dominos)
+    - cron: "*/15 * * * *"
+    # Weekly bank offer check — Monday 03:00 UTC
+    - cron: "0 3 * * 1"
+  workflow_dispatch: {}        # Manual trigger from GitHub UI
 
 permissions:
-  contents: write  # needed to commit the updated deals.db back to the repo
+  contents: write  # Needed to commit updated deals.db back to repo
 
 jobs:
   scout:
@@ -30,28 +30,46 @@ jobs:
           pip install -r requirements.txt
           playwright install --with-deps chromium
 
-      - name: Determine if this is the weekly bank-offer run
+      - name: Determine run mode
         id: schedule_check
         run: |
-          if [ "${{ github.event.schedule }}" = "0 3 * * 1" ]; then
-            echo "run_bank_check=true" >> "$GITHUB_OUTPUT"
+          SCHEDULE="${{ github.event.schedule }}"
+          # Bank offer flag (weekly Monday run)
+          if [ "$SCHEDULE" = "0 3 * * 1" ]; then
+            echo "run_bank_check=true"  >> "$GITHUB_OUTPUT"
           else
             echo "run_bank_check=false" >> "$GITHUB_OUTPUT"
           fi
+          # Coupon-only flag (15-min runs skip heavy Playwright scrapers)
+          if [ "$SCHEDULE" = "*/15 * * * *" ]; then
+            echo "coupon_only=true"  >> "$GITHUB_OUTPUT"
+          else
+            echo "coupon_only=false" >> "$GITHUB_OUTPUT"
+          fi
 
-      - name: Run Deal Scout
+      # ── Fast coupon-only path (15-min runs) ──────────────────────────────
+      - name: Run Instant Coupon Detector only
+        if: steps.schedule_check.outputs.coupon_only == 'true'
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
-          TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
-          TELEGRAM_SESSION: ${{ secrets.TELEGRAM_SESSION }}
-          RUN_BANK_CHECK: ${{ steps.schedule_check.outputs.run_bank_check }}
+          TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python -c "import sys; sys.path.insert(0,'scripts'); from db import init_db; init_db(); import coupon_detector; coupon_detector.run()"
+
+      # ── Full scan path (30-min and manual runs) ──────────────────────────
+      - name: Run Deal Scout (full scan)
+        if: steps.schedule_check.outputs.coupon_only == 'false'
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_API_ID:    ${{ secrets.TELEGRAM_API_ID }}
+          TELEGRAM_API_HASH:  ${{ secrets.TELEGRAM_API_HASH }}
+          TELEGRAM_SESSION:   ${{ secrets.TELEGRAM_SESSION }}
+          RUN_BANK_CHECK:     ${{ steps.schedule_check.outputs.run_bank_check }}
         run: python scripts/run_all.py
 
       - name: Commit updated database
         run: |
-          git config user.name "deal-scout-bot"
+          git config user.name  "deal-scout-bot"
           git config user.email "actions@github.com"
           git add data/deals.db data/deals.db-wal data/deals.db-shm 2>/dev/null || true
           git diff --quiet --cached || git commit -m "Update deal history [skip ci]"

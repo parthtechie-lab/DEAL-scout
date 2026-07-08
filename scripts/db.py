@@ -1,16 +1,16 @@
 """
-db.py — SQLite helper for Deal Scout.
+db.py — Deal Scout v2 SQLite helper.
 
-Stores:
-  - price_history: every price we've ever recorded per product, so we can
-    compute a genuine 90-day low (not a rolling average, which is easy to
-    fake with inflated "sale" prices).
-  - alerts_sent: dedup log, so we don't spam the same deal every run.
+Tables:
+  price_history  — every price ever recorded per product (for 90-day low).
+  alerts_sent    — dedup log; prevents sending the same alert twice.
+                   v2 adds: priority_score, discount_percent, source_reliability.
+  deal_titles    — lightweight cross-channel dedup store; keeps the title of
+                   every deal alerted in the last 6 hours so the matcher can
+                   fuzzy-check incoming deals before triggering a new alert.
 
-The DB file lives at data/deals.db and is committed back to the repo by the
+The DB lives at data/deals.db and is committed back to the repo by the
 GitHub Actions workflow after each run (see .github/workflows/deal-scout.yml).
-This is the "poor man's persistent database" for a $0 setup — fine at this
-scale (a few thousand rows), not something to scale past personal use.
 """
 
 import sqlite3
@@ -31,30 +31,47 @@ def init_db():
     conn = get_connection()
     conn.executescript(
         """
+        -- Price history for 90-day low tracking
         CREATE TABLE IF NOT EXISTS price_history (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            product_name TEXT NOT NULL,
-            url TEXT NOT NULL,
-            price INTEGER NOT NULL,
-            in_stock INTEGER NOT NULL DEFAULT 1,
-            checked_at TEXT NOT NULL
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            product_name TEXT    NOT NULL,
+            url          TEXT    NOT NULL,
+            price        INTEGER NOT NULL,
+            in_stock     INTEGER NOT NULL DEFAULT 1,
+            checked_at   TEXT    NOT NULL
         );
-
         CREATE INDEX IF NOT EXISTS idx_price_product
             ON price_history(product_name, checked_at);
 
+        -- Alert dedup log (v2: added priority_score, discount_percent, source_reliability)
         CREATE TABLE IF NOT EXISTS alerts_sent (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            dedup_key TEXT NOT NULL UNIQUE,
-            product_name TEXT NOT NULL,
-            price INTEGER,
-            sent_at TEXT NOT NULL
+            id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+            dedup_key          TEXT    NOT NULL UNIQUE,
+            product_name       TEXT    NOT NULL,
+            price              INTEGER,
+            priority_score     INTEGER DEFAULT 0,
+            discount_percent   INTEGER DEFAULT 0,
+            source_reliability INTEGER DEFAULT 0,
+            category           TEXT    DEFAULT '',
+            sent_at            TEXT    NOT NULL
         );
+
+        -- Cross-channel title dedup (6-hour rolling window)
+        CREATE TABLE IF NOT EXISTS deal_titles (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            title      TEXT NOT NULL,
+            source     TEXT NOT NULL,
+            alerted_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_deal_titles_time
+            ON deal_titles(alerted_at);
         """
     )
     conn.commit()
     conn.close()
 
+
+# ── Price history ─────────────────────────────────────────────────────────────
 
 def record_price(product_name: str, url: str, price: int, in_stock: bool = True):
     conn = get_connection()
@@ -68,8 +85,7 @@ def record_price(product_name: str, url: str, price: int, in_stock: bool = True)
 
 
 def get_historic_low(product_name: str, days: int = 90):
-    """Real 90-day low, not a rolling average — fixes the 'fake sale' problem
-    where retailers inflate the pre-sale price to fake a big discount."""
+    """Real 90-day low — not a rolling average — fixes the 'fake sale' problem."""
     conn = get_connection()
     cutoff = (datetime.utcnow() - timedelta(days=days)).isoformat()
     row = conn.execute(
@@ -80,6 +96,8 @@ def get_historic_low(product_name: str, days: int = 90):
     conn.close()
     return row[0] if row and row[0] is not None else None
 
+
+# ── Alert dedup ───────────────────────────────────────────────────────────────
 
 def already_alerted(dedup_key: str, within_hours: int = 24) -> bool:
     conn = get_connection()
@@ -92,12 +110,51 @@ def already_alerted(dedup_key: str, within_hours: int = 24) -> bool:
     return row is not None
 
 
-def mark_alerted(dedup_key: str, product_name: str, price: int):
+def mark_alerted(
+    dedup_key: str,
+    product_name: str,
+    price: int,
+    priority_score: int = 0,
+    discount_percent: int = 0,
+    source_reliability: int = 0,
+    category: str = "",
+):
     conn = get_connection()
     conn.execute(
-        "INSERT OR REPLACE INTO alerts_sent (dedup_key, product_name, price, sent_at) "
-        "VALUES (?, ?, ?, ?)",
-        (dedup_key, product_name, price, datetime.utcnow().isoformat()),
+        "INSERT OR REPLACE INTO alerts_sent "
+        "(dedup_key, product_name, price, priority_score, discount_percent, "
+        " source_reliability, category, sent_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            dedup_key, product_name, price, priority_score,
+            discount_percent, source_reliability, category,
+            datetime.utcnow().isoformat(),
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+
+# ── Cross-channel title dedup ─────────────────────────────────────────────────
+
+def get_recent_deal_titles(hours: int = 6) -> list[str]:
+    """Returns all deal titles alerted in the last `hours` hours."""
+    conn = get_connection()
+    cutoff = (datetime.utcnow() - timedelta(hours=hours)).isoformat()
+    rows = conn.execute(
+        "SELECT title FROM deal_titles WHERE alerted_at >= ?",
+        (cutoff,),
+    ).fetchall()
+    conn.close()
+    return [r[0] for r in rows]
+
+
+def record_deal_title(title: str, source: str):
+    """Persist a deal title for cross-channel dedup lookups."""
+    conn = get_connection()
+    conn.execute(
+        "INSERT INTO deal_titles (title, source, alerted_at) VALUES (?, ?, ?)",
+        (title, source, datetime.utcnow().isoformat()),
     )
     conn.commit()
     conn.close()
@@ -105,4 +162,4 @@ def mark_alerted(dedup_key: str, product_name: str, price: int):
 
 if __name__ == "__main__":
     init_db()
-    print(f"Initialized DB at {DB_PATH}")
+    print(f"[db] v2 schema initialised at {DB_PATH}")

@@ -1,339 +1,156 @@
 {
+  "meta": {
+    "schema_version": "2.0.0",
+    "target_market": "India",
+    "description": "Deal Scout v2 — master config. Combines all sources, keywords, extraction patterns and matching rules.",
+    "last_updated": "2026-07-08"
+  },
+
   "telegram_channels": [
-    "@desidime",
-    "@desidimehot",
-    "@GrabOnIndiaOfficial",
-    "@icoolzTricks",
-    "@idoffers",
-    "@gopaisadeals",
-    "@bigtricksin",
-    "@Earticledeal",
-    "@foodcoupon",
-    "@foodielooters",
-    "@Extrape",
-    "@hotofferme",
-    "@tech24deals",
-    "@TrickXpert",
-    "@Flipshope",
-    "@realearnkaro"
-  ],
-
-  "coupon_sites": [
-    {
-      "name": "DesiDime",
-      "base_url": "https://www.desidime.com/stores",
-      "url_pattern": "{base_url}/{platform}-coupons",
-      "categories": ["electronics", "food", "sports", "electrical"]
-    },
-    {
-      "name": "GrabOn",
-      "base_url": "https://www.grabon.in",
-      "url_pattern": "{base_url}/{platform}-coupons/",
-      "categories": ["electronics", "food", "sports", "electrical"]
-    },
-    {
-      "name": "CashKaro",
-      "base_url": "https://cashkaro.com",
-      "url_pattern": "{base_url}/{platform}-coupons",
-      "categories": ["electronics", "food", "sports", "electrical"]
-    },
-    {
-      "name": "Zoutons",
-      "base_url": "https://zoutons.com",
-      "url_pattern": "{base_url}/{platform}-coupons",
-      "categories": ["electronics", "food", "sports", "electrical"]
-    },
-    {
-      "name": "CouponDunia",
-      "base_url": "https://www.coupondunia.in",
-      "url_pattern": "{base_url}/{platform}-coupons",
-      "categories": ["electronics", "food", "sports", "electrical"]
-    },
-    {
-      "name": "FreeKaaMaal",
-      "base_url": "https://www.freekaamaal.com",
-      "url_pattern": "{base_url}/{platform}-coupons",
-      "categories": ["electronics", "food", "sports", "electrical"]
-    },
-    {
-      "name": "IndiaDesire",
-      "base_url": "https://indiadesire.com",
-      "url_pattern": "{base_url}/{platform}-coupons",
-      "categories": ["electronics", "food", "sports", "electrical"]
-    },
-    {
-      "name": "GoPaisa",
-      "base_url": "https://www.gopaisa.com/stores",
-      "url_pattern": "{base_url}/{platform}-coupons",
-      "categories": ["electronics", "food", "sports", "electrical"]
-    },
-    {
-      "name": "Picodi",
-      "base_url": "https://www.picodi.com/in",
-      "url_pattern": "{base_url}/{platform}",
-      "categories": ["electronics", "food", "sports", "electrical"]
-    },
-    {
-      "name": "CouponZania",
-      "base_url": "https://couponzania.com",
-      "url_pattern": "{base_url}/{platform}-coupons",
-      "categories": ["electronics", "food", "sports", "electrical"]
-    },
-    {
-      "name": "Hutti",
-      "base_url": "https://hutti.in",
-      "url_pattern": "{base_url}/{platform}-coupons",
-      "categories": ["food"]
-    },
-    {
-      "name": "Dealsmagnet",
-      "base_url": "https://dealsmagnet.com",
-      "url_pattern": "{base_url}/{platform}-coupons",
-      "categories": ["electronics", "food", "sports", "electrical"]
-    }
-  ],
-
-  "food_platforms": [
-    {
-      "name": "Swiggy",
-      "slug": "swiggy",
-      "emoji": "🛵",
-      "stacking_tip": "Use Swiggy One membership + HDFC Swiggy card (10% cashback) + buy Swiggy gift cards from HDFC SmartBuy for triple savings"
-    },
-    {
-      "name": "Zomato",
-      "slug": "zomato",
-      "emoji": "🍕",
-      "stacking_tip": "Use Zomato Gold + HDFC Diners Club (5X rewards) + discounted gift cards from Zingoy for triple savings"
-    },
-    {
-      "name": "Blinkit",
-      "slug": "blinkit",
-      "emoji": "⚡",
-      "stacking_tip": "Use Zomato Gold (includes Blinkit free delivery) + bank UPI offers + in-app 'Maha Value' deals"
-    },
-    {
-      "name": "Zepto",
-      "slug": "zepto",
-      "emoji": "🟣",
-      "stacking_tip": "Use Zepto Pass + bank card offer + check 'Super Saver' section for hidden bundle deals"
-    },
-    {
-      "name": "BigBasket",
-      "slug": "bigbasket",
-      "emoji": "🛒",
-      "stacking_tip": "Use BB Star membership + Paytm wallet cashback + 'Smart Basket' auto-discounts for bulk savings"
-    },
-    {
-      "name": "Dominos",
-      "slug": "dominos",
-      "emoji": "🍕",
-      "stacking_tip": "Use 'Everyday Value' menu + coupon code + HDFC/SBI card offer — stack all three at checkout"
-    },
-    {
-      "name": "Swiggy Instamart",
-      "slug": "swiggy-instamart",
-      "emoji": "📦",
-      "stacking_tip": "Use Swiggy One + Instamart-specific coupon codes + bank card discount"
-    }
+    { "handle": "@desidime",           "name": "DesiDime",            "category": ["electronics","food","fashion","general"], "reliability_score": 9, "type": "deal_channel" },
+    { "handle": "@desidimehot",        "name": "DesiDime Hot Deals",  "category": ["electronics","general"],                  "reliability_score": 8, "type": "deal_channel" },
+    { "handle": "@GrabOnIndiaOfficial","name": "GrabOn India",        "category": ["electronics","food","fashion"],           "reliability_score": 8, "type": "coupon_channel" },
+    { "handle": "@Flipshope",          "name": "Flipshope",           "category": ["electronics","general"],                  "reliability_score": 8, "type": "deal_channel" },
+    { "handle": "@tech24deals",        "name": "Tech24 Deals",        "category": ["electronics"],                            "reliability_score": 7, "type": "deal_channel" },
+    { "handle": "@gopaisadeals",       "name": "GoPaisa Deals",       "category": ["electronics","food"],                     "reliability_score": 7, "type": "coupon_channel" },
+    { "handle": "@realearnkaro",       "name": "EarnKaro Official",   "category": ["general","cashback"],                     "reliability_score": 7, "type": "cashback_channel" },
+    { "handle": "@icoolzTricks",       "name": "iCoolz Tricks",       "category": ["general","recharge","tricks"],            "reliability_score": 6, "type": "deal_channel" },
+    { "handle": "@idoffers",           "name": "ID Offers",           "category": ["electronics","fashion"],                  "reliability_score": 6, "type": "deal_channel" },
+    { "handle": "@Earticledeal",       "name": "E-Article Deal",      "category": ["electronics"],                            "reliability_score": 6, "type": "deal_channel" },
+    { "handle": "@foodcoupon",         "name": "Food Coupon",         "category": ["food"],                                   "reliability_score": 6, "type": "coupon_channel" },
+    { "handle": "@foodielooters",      "name": "Foodie Looters",      "category": ["food"],                                   "reliability_score": 6, "type": "deal_channel" },
+    { "handle": "@bigtricksin",        "name": "Big Tricks India",    "category": ["general","recharge"],                     "reliability_score": 5, "type": "deal_channel" },
+    { "handle": "@Extrape",            "name": "Extrape",             "category": ["general"],                                "reliability_score": 5, "type": "deal_channel" },
+    { "handle": "@hotofferme",         "name": "Hot Offer Me",        "category": ["general","electronics"],                  "reliability_score": 5, "type": "deal_channel" },
+    { "handle": "@TrickXpert",         "name": "Trick Xpert",         "category": ["general","recharge"],                     "reliability_score": 5, "type": "deal_channel" }
   ],
 
   "reddit_subreddits": [
-    "dealsforindia",
-    "GreatIndiaDeals",
-    "Lootdealsforindia",
-    "indianshoppingdeals",
-    "IndiaCoupon"
+    { "name": "dealsforindia",       "reliability_score": 7 },
+    { "name": "GreatIndiaDeals",     "reliability_score": 7 },
+    { "name": "Lootdealsforindia",   "reliability_score": 6 },
+    { "name": "indianshoppingdeals", "reliability_score": 6 },
+    { "name": "IndiaCoupon",         "reliability_score": 6 }
   ],
 
-  "products": [
-    {
-      "name": "boAt Rockerz 450 Bluetooth Headphone",
-      "keywords": ["boat rockerz", "boat headphone", "rockerz 450", "boat bluetooth"],
-      "url": "https://www.amazon.in/dp/B07QT6RP3D",
-      "platform": "amazon",
-      "target_price": 999,
-      "category": "electronics"
-    },
-    {
-      "name": "Realme Buds Air 5 TWS Earbuds",
-      "keywords": ["realme buds", "buds air 5", "realme tws", "realme earbuds"],
-      "url": "https://www.flipkart.com/realme-buds-air-5/p/itm123",
-      "platform": "flipkart",
-      "target_price": 2500,
-      "category": "electronics"
-    },
-    {
-      "name": "Mi 40W Fast Charger",
-      "keywords": ["mi charger", "xiaomi charger", "40w charger", "mi 40w"],
-      "url": "https://www.amazon.in/dp/B093DJQ5JF",
-      "platform": "amazon",
-      "target_price": 599,
-      "category": "electronics"
-    },
-    {
-      "name": "TP-Link TL-WR845N WiFi Router",
-      "keywords": ["tp-link router", "tl-wr845n", "wifi router", "tp link"],
-      "url": "https://www.amazon.in/dp/B01HKPYOU4",
-      "platform": "amazon",
-      "target_price": 1100,
-      "category": "electronics"
-    },
-    {
-      "name": "Syska LED Bulb 9W Pack of 6",
-      "keywords": ["syska bulb", "led bulb", "syska led", "9w bulb"],
-      "url": "https://www.amazon.in/dp/B07P6TVRM5",
-      "platform": "amazon",
-      "target_price": 299,
-      "category": "electrical"
-    },
-    {
-      "name": "Havells Extension Cord 6-Socket",
-      "keywords": ["havells extension", "extension cord", "havells power strip", "6 socket"],
-      "url": "https://www.amazon.in/dp/B00Q9SDB9C",
-      "platform": "amazon",
-      "target_price": 399,
-      "category": "electrical"
-    },
-    {
-      "name": "Anchor Roma Switches (10A, Pack of 5)",
-      "keywords": ["anchor roma", "anchor switch", "roma switch", "10a switch"],
-      "url": "https://www.amazon.in/dp/B07F2YDYL1",
-      "platform": "amazon",
-      "target_price": 299,
-      "category": "electrical"
-    },
-    {
-      "name": "Tata Sampann Chana Dal 1kg",
-      "keywords": ["tata sampann", "chana dal", "tata dal", "sampann chana"],
-      "url": "https://www.amazon.in/dp/B07CNHFCF3",
-      "platform": "amazon",
-      "target_price": 95,
-      "category": "food"
-    },
-    {
-      "name": "Saffola Gold Oil 5 Litre",
-      "keywords": ["saffola oil", "saffola gold", "5 litre oil", "cooking oil deal"],
-      "url": "https://www.amazon.in/dp/B0842QT98Q",
-      "platform": "amazon",
-      "target_price": 750,
-      "category": "food"
-    },
-    {
-      "name": "Nescafe Gold 200g Coffee",
-      "keywords": ["nescafe gold", "nescafe coffee", "instant coffee deal", "nescafe 200g"],
-      "url": "https://www.flipkart.com/nescafe-gold/p/itm123",
-      "platform": "flipkart",
-      "target_price": 499,
-      "category": "food"
-    },
-    {
-      "name": "Nivia Football Size 5",
-      "keywords": ["nivia football", "football size 5", "nivia ball", "nivia fb"],
-      "url": "https://www.amazon.in/dp/B00YQ6VZWY",
-      "platform": "amazon",
-      "target_price": 499,
-      "category": "sports"
-    },
-    {
-      "name": "Cosco Cricket Bat Kashmir Willow",
-      "keywords": ["cosco bat", "cricket bat", "kashmir willow", "cosco cricket"],
-      "url": "https://www.amazon.in/dp/B076DP9DLZ",
-      "platform": "amazon",
-      "target_price": 799,
-      "category": "sports"
-    },
-    {
-      "name": "Boldfit Gym Gloves",
-      "keywords": ["boldfit gloves", "gym gloves", "workout gloves", "fitness gloves"],
-      "url": "https://www.amazon.in/dp/B08SZNPHQJ",
-      "platform": "amazon",
-      "target_price": 299,
-      "category": "sports"
-    },
-    {
-      "name": "Strauss Yoga Mat 6mm",
-      "keywords": ["strauss yoga", "yoga mat", "6mm yoga mat", "strauss mat"],
-      "url": "https://www.amazon.in/dp/B07NWQB7DZ",
-      "platform": "amazon",
-      "target_price": 499,
-      "category": "sports"
-    }
-  ],
-
-  "category_keywords": {
-    "electronics": [
-      "earphone", "earbuds", "headphone", "speaker", "bluetooth", "TWS",
-      "mobile", "phone", "charger", "power bank", "laptop", "tablet",
-      "smartwatch", "LED TV", "router", "wifi", "camera", "pen drive",
-      "hard disk", "SSD", "keyboard", "mouse", "monitor", "webcam",
-      "gaming", "controller", "console", "trimmer", "drone", "projector"
-    ],
-    "electrical": [
-      "LED bulb", "tube light", "extension cord", "power strip", "switch",
-      "socket", "MCB", "inverter", "UPS", "stabilizer", "electric fan",
-      "ceiling fan", "wiring", "cable", "wire", "regulator", "dimmer",
-      "geyser", "water heater", "iron", "mixer", "grinder", "induction"
-    ],
-    "food": [
-      "dal", "oil", "ghee", "rice", "atta", "flour", "spice", "masala",
-      "coffee", "tea", "biscuit", "chocolate", "dry fruit", "nuts",
-      "protein powder", "supplement", "juice", "sauce", "ketchup", "pasta",
-      "noodles", "instant food", "snack", "cereal",
-      "swiggy", "zomato", "blinkit", "zepto", "bigbasket", "dominos", "domino's",
-      "instamart", "dunzo", "grocery", "food delivery", "order food",
-      "free delivery", "flat off food", "restaurant", "pizza", "burger",
-      "biryani", "thali", "meal", "combo", "lunch", "dinner", "breakfast",
-      "swiggy one", "zomato gold", "pro membership",
-      "faasos", "ovenstory", "behrouz", "pizza hut", "kfc", "mcdonald",
-      "burger king", "subway", "haldiram", "pantry", "groceries",
-      "fruits", "vegetables", "meat", "chicken", "fish", "eggs", "dairy",
-      "milk", "bread", "butter", "cheese", "ice cream", "frozen"
-    ],
-    "sports": [
-      "cricket bat", "cricket ball", "football", "badminton", "shuttle",
-      "yoga mat", "gym gloves", "resistance band", "dumbbell", "kettlebell",
-      "treadmill", "cycle", "bicycle", "skipping rope", "sports shoes",
-      "jersey", "shorts", "gym wear", "protein", "whey", "fitness",
-      "running shoes", "tennis", "table tennis", "swimming", "skating",
-      "boxing gloves", "punch bag", "pull up bar", "ab roller"
-    ]
-  },
-
-  "deal_signal_words": [
-    "%", "off", "discount", "coupon", "promo", "cashback", "deal",
-    "offer", "sale", "loot", "flat", "rs.", "₹", "free", "lowest",
-    "price drop", "bank offer", "extra", "flash", "limited", "today only",
-    "steal", "price error", "glitch", "lowest ever", "all time low",
-    "clearance", "bumper", "mega", "super", "buy 1 get 1", "bogo",
-    "b1g1", "buy one get one", "combo offer", "bundle", "voucher",
-    "gift card", "recharge", "min order", "no minimum", "first order",
-    "new user", "signup", "referral", "invite code", "exclusive",
-    "60% off", "70% off", "80% off", "90% off", "95% off", "99% off",
-    "₹1 deal", "₹9 deal", "₹29", "₹49", "₹99", "almost free",
-    "maha loot", "biggest sale", "festival offer"
+  "coupon_sites": [
+    { "name": "DesiDime",             "base_url": "https://www.desidime.com/stores",        "url_pattern": "{base_url}/{platform}-coupons",  "categories": ["electronics","food","sports","electrical","fashion"], "reliability_score": 9, "scrape_interval_minutes": 30 },
+    { "name": "GrabOn",               "base_url": "https://www.grabon.in",                  "url_pattern": "{base_url}/{platform}-coupons/", "categories": ["electronics","food","sports","electrical","fashion"], "reliability_score": 8, "scrape_interval_minutes": 30 },
+    { "name": "CashKaro",             "base_url": "https://cashkaro.com",                   "url_pattern": "{base_url}/{platform}-coupons",  "categories": ["electronics","food","sports","electrical","fashion"], "reliability_score": 8, "scrape_interval_minutes": 45 },
+    { "name": "Amazon Today Deals",   "base_url": "https://www.amazon.in/deals",            "url_pattern": "{base_url}",                     "categories": ["electronics","electrical","sports","fashion","home_kitchen"], "reliability_score": 9, "scrape_interval_minutes": 15 },
+    { "name": "Flipkart Offers Zone", "base_url": "https://www.flipkart.com/offers-store",  "url_pattern": "{base_url}",                     "categories": ["electronics","electrical","sports","fashion","home_kitchen"], "reliability_score": 9, "scrape_interval_minutes": 15 },
+    { "name": "Zoutons",              "base_url": "https://zoutons.com",                    "url_pattern": "{base_url}/{platform}-coupons",  "categories": ["electronics","food","sports","electrical"],          "reliability_score": 7, "scrape_interval_minutes": 45 },
+    { "name": "CouponDunia",          "base_url": "https://www.coupondunia.in",             "url_pattern": "{base_url}/{platform}-coupons",  "categories": ["electronics","food","sports","electrical"],          "reliability_score": 7, "scrape_interval_minutes": 45 },
+    { "name": "IndiaDesire",          "base_url": "https://indiadesire.com",                "url_pattern": "{base_url}/{platform}-coupons",  "categories": ["electronics","food","sports","electrical"],          "reliability_score": 7, "scrape_interval_minutes": 45 },
+    { "name": "CupoNation",           "base_url": "https://www.cuponation.in",              "url_pattern": "{base_url}/{platform}",          "categories": ["electronics","fashion","food"],                      "reliability_score": 6, "scrape_interval_minutes": 60 },
+    { "name": "FreeKaaMaal",          "base_url": "https://www.freekaamaal.com",            "url_pattern": "{base_url}/{platform}-coupons",  "categories": ["electronics","food","sports","electrical"],          "reliability_score": 6, "scrape_interval_minutes": 60 },
+    { "name": "GoPaisa",              "base_url": "https://www.gopaisa.com/stores",         "url_pattern": "{base_url}/{platform}-coupons",  "categories": ["electronics","food","sports","electrical"],          "reliability_score": 6, "scrape_interval_minutes": 60 },
+    { "name": "Picodi",               "base_url": "https://www.picodi.com/in",              "url_pattern": "{base_url}/{platform}",          "categories": ["electronics","food","sports","electrical"],          "reliability_score": 6, "scrape_interval_minutes": 60 },
+    { "name": "Hutti",                "base_url": "https://hutti.in",                       "url_pattern": "{base_url}/{platform}-coupons",  "categories": ["food"],                                             "reliability_score": 5, "scrape_interval_minutes": 60 },
+    { "name": "Dealsmagnet",          "base_url": "https://dealsmagnet.com",                "url_pattern": "{base_url}/{platform}-coupons",  "categories": ["electronics","food","sports","electrical"],          "reliability_score": 5, "scrape_interval_minutes": 60 },
+    { "name": "CouponZania",          "base_url": "https://couponzania.com",                "url_pattern": "{base_url}/{platform}-coupons",  "categories": ["electronics","food","sports","electrical"],          "reliability_score": 5, "scrape_interval_minutes": 60 }
   ],
 
   "bank_offer_pages": [
-    {
-      "bank": "HDFC",
-      "url": "https://www.hdfcbank.com/personal/pay/cards/credit-cards/smartbuy-offers"
-    },
-    {
-      "bank": "ICICI",
-      "url": "https://www.icicibank.com/offers"
-    },
-    {
-      "bank": "SBI",
-      "url": "https://www.sbi.co.in/web/personal-banking/cards/credit-card/credit-card-offers"
-    },
-    {
-      "bank": "Kotak",
-      "url": "https://www.kotak.com/en/personal-banking/cards/credit-cards/credit-card-offers.html"
-    },
-    {
-      "bank": "Axis",
-      "url": "https://www.axisbank.com/grab-deals/offers"
+    { "bank": "HDFC",             "url": "https://www.hdfcbank.com/personal/pay/cards/credit-cards/smartbuy-offers",                                  "card_types": ["credit","debit"], "reliability_score": 9 },
+    { "bank": "ICICI",            "url": "https://www.icicibank.com/offers",                                                                          "card_types": ["credit","debit"], "reliability_score": 9 },
+    { "bank": "SBI",              "url": "https://www.sbi.co.in/web/personal-banking/cards/credit-card/credit-card-offers",                           "card_types": ["credit","debit"], "reliability_score": 8 },
+    { "bank": "Axis",             "url": "https://www.axisbank.com/grab-deals/offers",                                                               "card_types": ["credit","debit"], "reliability_score": 8 },
+    { "bank": "Kotak",            "url": "https://www.kotak.com/en/personal-banking/cards/credit-cards/credit-card-offers.html",                     "card_types": ["credit","debit"], "reliability_score": 7 },
+    { "bank": "American Express", "url": "https://www.americanexpress.com/en-in/benefits/offers/",                                                    "card_types": ["credit"],         "reliability_score": 7 },
+    { "bank": "Yes Bank",         "url": "https://www.yesbank.in/personal-banking/yes-first/offers",                                                 "card_types": ["credit","debit"], "reliability_score": 6 },
+    { "bank": "IDFC First",       "url": "https://www.idfcfirstbank.com/credit-card/offers",                                                         "card_types": ["credit"],         "reliability_score": 6 },
+    { "bank": "RBL Bank",         "url": "https://www.rblbank.com/offers",                                                                           "card_types": ["credit","debit"], "reliability_score": 6 },
+    { "bank": "Bank of Baroda",   "url": "https://www.bankofbaroda.in/offers",                                                                       "card_types": ["credit","debit"], "reliability_score": 5 }
+  ],
+
+  "ecommerce_platforms": [
+    { "name": "Amazon India",      "slug": "amazon",          "emoji": "📦", "categories": ["electronics","electrical","sports","fashion","home_kitchen","books_stationery"] },
+    { "name": "Flipkart",          "slug": "flipkart",        "emoji": "🛍️", "categories": ["electronics","electrical","sports","fashion","home_kitchen"] },
+    { "name": "Myntra",            "slug": "myntra",          "emoji": "👗", "categories": ["fashion","beauty"] },
+    { "name": "Ajio",              "slug": "ajio",            "emoji": "🧥", "categories": ["fashion"] },
+    { "name": "Meesho",            "slug": "meesho",          "emoji": "🛒", "categories": ["fashion","home_kitchen"] },
+    { "name": "Nykaa",             "slug": "nykaa",           "emoji": "💄", "categories": ["beauty"] },
+    { "name": "Tata Cliq",         "slug": "tatacliq",        "emoji": "🏬", "categories": ["electronics","fashion"] },
+    { "name": "Croma",             "slug": "croma",           "emoji": "🔌", "categories": ["electronics","electrical","appliances"] },
+    { "name": "Reliance Digital",  "slug": "reliancedigital", "emoji": "📺", "categories": ["electronics","electrical","appliances"] },
+    { "name": "JioMart",           "slug": "jiomart",         "emoji": "🛒", "categories": ["food","home_kitchen"] }
+  ],
+
+  "food_platforms": [
+    { "name": "Swiggy",           "slug": "swiggy",           "emoji": "🛵", "stacking_tip": "Swiggy One membership + HDFC Swiggy card (10% cashback) + discounted Swiggy gift cards from HDFC SmartBuy" },
+    { "name": "Zomato",           "slug": "zomato",           "emoji": "🍕", "stacking_tip": "Zomato Gold + HDFC Diners Club (5X rewards) + discounted gift cards via cashback portals" },
+    { "name": "Blinkit",          "slug": "blinkit",          "emoji": "⚡", "stacking_tip": "Zomato Gold (Blinkit free delivery) + bank UPI offer + in-app 'Maha Value' deals" },
+    { "name": "Zepto",            "slug": "zepto",            "emoji": "🟣", "stacking_tip": "Zepto Pass + bank card offer + 'Super Saver' section bundle deals" },
+    { "name": "BigBasket",        "slug": "bigbasket",        "emoji": "🛒", "stacking_tip": "BB Star membership + wallet cashback + 'Smart Basket' auto-discounts for bulk savings" },
+    { "name": "Dominos",          "slug": "dominos",          "emoji": "🍕", "stacking_tip": "'Everyday Value' menu + coupon code + bank card offer — stack all three at checkout" },
+    { "name": "Swiggy Instamart", "slug": "swiggy-instamart", "emoji": "📦", "stacking_tip": "Swiggy One + Instamart-specific coupon codes + bank card discount" }
+  ],
+
+  "products": [
+    { "name": "boAt Rockerz 450 Bluetooth Headphone",  "keywords": ["boat rockerz","boat headphone","rockerz 450","boat bluetooth"],              "url": "https://www.amazon.in/dp/B07QT6RP3D",              "platform": "amazon",   "target_price": 999,  "category": "electronics" },
+    { "name": "Realme Buds Air 5 TWS Earbuds",         "keywords": ["realme buds","buds air 5","realme tws","realme earbuds"],                    "url": "https://www.flipkart.com/realme-buds-air-5/p/itm123", "platform": "flipkart", "target_price": 2500, "category": "electronics" },
+    { "name": "Mi 40W Fast Charger",                   "keywords": ["mi charger","xiaomi charger","40w charger","mi 40w"],                        "url": "https://www.amazon.in/dp/B093DJQ5JF",              "platform": "amazon",   "target_price": 599,  "category": "electronics" },
+    { "name": "TP-Link TL-WR845N WiFi Router",         "keywords": ["tp-link router","tl-wr845n","wifi router","tp link"],                        "url": "https://www.amazon.in/dp/B01HKPYOU4",              "platform": "amazon",   "target_price": 1100, "category": "electronics" },
+    { "name": "Syska LED Bulb 9W Pack of 6",           "keywords": ["syska bulb","led bulb","syska led","9w bulb"],                               "url": "https://www.amazon.in/dp/B07P6TVRM5",              "platform": "amazon",   "target_price": 299,  "category": "electrical" },
+    { "name": "Havells Extension Cord 6-Socket",       "keywords": ["havells extension","extension cord","havells power strip","6 socket"],        "url": "https://www.amazon.in/dp/B00Q9SDB9C",              "platform": "amazon",   "target_price": 399,  "category": "electrical" },
+    { "name": "Anchor Roma Switches 10A Pack of 5",    "keywords": ["anchor roma","anchor switch","roma switch","10a switch"],                     "url": "https://www.amazon.in/dp/B07F2YDYL1",              "platform": "amazon",   "target_price": 299,  "category": "electrical" },
+    { "name": "Tata Sampann Chana Dal 1kg",            "keywords": ["tata sampann","chana dal","tata dal","sampann chana"],                        "url": "https://www.amazon.in/dp/B07CNHFCF3",              "platform": "amazon",   "target_price": 95,   "category": "food" },
+    { "name": "Saffola Gold Oil 5 Litre",              "keywords": ["saffola oil","saffola gold","5 litre oil","cooking oil deal"],                "url": "https://www.amazon.in/dp/B0842QT98Q",              "platform": "amazon",   "target_price": 750,  "category": "food" },
+    { "name": "Nescafe Gold 200g Coffee",              "keywords": ["nescafe gold","nescafe coffee","instant coffee deal","nescafe 200g"],         "url": "https://www.flipkart.com/nescafe-gold/p/itm123",   "platform": "flipkart", "target_price": 499,  "category": "food" },
+    { "name": "Nivia Football Size 5",                 "keywords": ["nivia football","football size 5","nivia ball","nivia fb"],                   "url": "https://www.amazon.in/dp/B00YQ6VZWY",              "platform": "amazon",   "target_price": 499,  "category": "sports" },
+    { "name": "Cosco Cricket Bat Kashmir Willow",      "keywords": ["cosco bat","cricket bat","kashmir willow","cosco cricket"],                   "url": "https://www.amazon.in/dp/B076DP9DLZ",              "platform": "amazon",   "target_price": 799,  "category": "sports" },
+    { "name": "Boldfit Gym Gloves",                    "keywords": ["boldfit gloves","gym gloves","workout gloves","fitness gloves"],              "url": "https://www.amazon.in/dp/B08SZNPHQJ",              "platform": "amazon",   "target_price": 299,  "category": "sports" },
+    { "name": "Strauss Yoga Mat 6mm",                  "keywords": ["strauss yoga","yoga mat","6mm yoga mat","strauss mat"],                       "url": "https://www.amazon.in/dp/B07NWQB7DZ",              "platform": "amazon",   "target_price": 499,  "category": "sports" }
+  ],
+
+  "category_keywords": {
+    "electronics": ["earphone","earbuds","headphone","speaker","bluetooth","TWS","mobile","phone","charger","power bank","laptop","tablet","smartwatch","LED TV","router","wifi","camera","pen drive","hard disk","SSD","keyboard","mouse","monitor","webcam","gaming","controller","console","trimmer","drone","projector"],
+    "electrical":  ["LED bulb","tube light","extension cord","power strip","switch","socket","MCB","inverter","UPS","stabilizer","electric fan","ceiling fan","wiring","cable","wire","regulator","dimmer","geyser","water heater","iron","mixer","grinder","induction"],
+    "food":        ["dal","oil","ghee","rice","atta","flour","spice","masala","coffee","tea","biscuit","chocolate","dry fruit","nuts","protein powder","supplement","juice","sauce","ketchup","pasta","noodles","instant food","snack","cereal","swiggy","zomato","blinkit","zepto","bigbasket","dominos","domino's","instamart","dunzo","grocery","food delivery","order food","free delivery","flat off food","restaurant","pizza","burger","biryani","thali","meal","combo","lunch","dinner","breakfast","swiggy one","zomato gold","faasos","ovenstory","behrouz","pizza hut","kfc","mcdonald","burger king","subway","haldiram","pantry","groceries","fruits","vegetables","meat","chicken","fish","eggs","dairy","milk","bread","butter","cheese","ice cream","frozen"],
+    "sports":      ["cricket bat","cricket ball","football","badminton","shuttle","yoga mat","gym gloves","resistance band","dumbbell","kettlebell","treadmill","cycle","bicycle","skipping rope","sports shoes","jersey","shorts","gym wear","protein","whey","fitness","running shoes","tennis","table tennis","swimming","skating","boxing gloves","punch bag","pull up bar","ab roller"],
+    "fashion":     ["t-shirt","shirt","jeans","kurta","saree","dress","footwear","sneakers","sandals","heels","watch","sunglasses","handbag","wallet","belt","jacket","hoodie","ethnic wear","western wear","innerwear","loungewear"],
+    "beauty":      ["makeup","lipstick","foundation","skincare","moisturizer","sunscreen","shampoo","conditioner","perfume","deodorant","face wash","serum","haircare","beauty kit","grooming kit"],
+    "home_kitchen":["cookware","non-stick pan","pressure cooker","kitchen set","storage container","bedsheet","pillow","blanket","curtains","furniture","decor","dinner set","water bottle","lunch box"],
+    "appliances":  ["washing machine","refrigerator","microwave","air conditioner","ac","air cooler","air purifier","water purifier","vacuum cleaner","dishwasher","chimney"],
+    "mobiles":     ["smartphone","iphone","android phone","5g phone","mobile deal","phone under","flagship phone","budget phone"],
+    "baby_kids":   ["diapers","baby food","baby wipes","toys","stroller","kids wear","school bag","feeding bottle"],
+    "books_stationery": ["books","notebook","pen set","stationery","exam guide","novel","textbook"],
+    "travel":      ["flight ticket","hotel booking","train ticket","bus ticket","travel insurance","holiday package","cab booking"]
+  },
+
+  "deal_signal_words": [
+    "%","off","discount","coupon","promo","cashback","deal","offer","sale","loot","flat","rs.","₹","free","lowest",
+    "price drop","bank offer","extra","flash","limited","today only","steal","price error","glitch","lowest ever",
+    "all time low","clearance","bumper","mega","super","buy 1 get 1","bogo","b1g1","buy one get one","combo offer",
+    "bundle","voucher","gift card","recharge","min order","no minimum","first order","new user","signup","referral",
+    "invite code","exclusive","60% off","70% off","80% off","90% off","95% off","99% off","₹1 deal","₹9 deal",
+    "₹29","₹49","₹99","almost free","maha loot","biggest sale","festival offer"
+  ],
+
+  "extraction_patterns": {
+    "price_regex":           ["₹\\s?([0-9,]+)(?:/-)?", "Rs\\.?\\s?([0-9,]+)", "INR\\s?([0-9,]+)"],
+    "discount_percent_regex":["([0-9]{1,3})\\s?%\\s?(?:off|discount)"],
+    "coupon_code_regex":     ["(?:use|apply|code|coupon|promo)[:\\s]+([A-Z][A-Z0-9]{3,14})","\"([A-Z][A-Z0-9]{4,14})\""],
+    "expiry_regex":          ["valid till\\s*([0-9]{1,2}[a-zA-Z\\s0-9]{0,15})","expires?\\s*(?:on)?\\s*([0-9]{1,2}[a-zA-Z\\s0-9]{0,15})"]
+  },
+
+  "matching_rules": {
+    "min_reliability_score": 5,
+    "fuzzy_threshold": 85,
+    "dedup_window_hours": 6,
+    "min_priority_score_to_alert": 40,
+    "priority_weights": {
+      "discount_percent":    0.35,
+      "source_reliability":  0.25,
+      "keyword_match_count": 0.20,
+      "price_below_target":  0.20
     }
-  ]
+  },
+
+  "quiet_hours": {
+    "start": "22:00",
+    "end":   "08:00",
+    "timezone": "Asia/Kolkata"
+  }
 }

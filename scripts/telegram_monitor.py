@@ -1,28 +1,24 @@
 """
-telegram_monitor.py — reads recent messages from deal channels and matches
-them against your watchlist keywords AND category keywords.
+telegram_monitor.py — Deal Scout v2.
 
-Uses Telethon (a USER client, not a bot) because bots cannot read channel
-history/messages the way a logged-in user account can. This is why setup
-needs TELEGRAM_API_ID / TELEGRAM_API_HASH from https://my.telegram.org,
-plus a one-time login that produces a session string (see
-generate_session.py), stored afterwards as a GitHub Secret so Actions
-never needs to log in interactively again.
+Reads recent messages from deal channels and matches them against:
+  Layer 1 — specific product keywords  (high confidence, always alert if score ≥ 40)
+  Layer 2 — food platform detection    (Swiggy / Zomato / Blinkit / etc + deal signal)
+  Layer 3 — category keywords          (13 categories + deal signal words)
 
-Matching is multi-layered:
-  Layer 1 — specific product keywords (high confidence, always alert)
-  Layer 2 — food platform detection (swiggy/zomato/blinkit/etc) + deal signal
-  Layer 3 — category keywords (electronics/food/sports/electrical) +
-             deal signal words → medium confidence alerts
-
-This layered approach means you won't miss a great deal just because it
-doesn't mention your exact product name, but you also won't get spammed by
-irrelevant channel noise.
+v2 upgrades:
+  • Channels sorted by reliability_score DESC (best sources processed first).
+  • Channels with reliability_score < matching_rules.min_reliability_score skipped.
+  • matcher.py used for deal extraction (price, discount%, coupon, expiry).
+  • Priority score computed; deals scoring < min_priority_score_to_alert dropped.
+  • Cross-channel fuzzy dedup via db.get_recent_deal_titles() + matcher.deduplicate_title().
+  • send_deal_alert() used for richer, consistent message format.
 """
 
 import asyncio
 import json
 import os
+import re
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 
@@ -30,44 +26,22 @@ from dotenv import load_dotenv
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 
-from db import already_alerted, mark_alerted
-from notifier import send_alert
+from db import already_alerted, mark_alerted, get_recent_deal_titles, record_deal_title
+from notifier import send_deal_alert, send_alert
+from matcher import (
+    extract_deal_info, score_deal, priority_badge,
+    detect_food_platforms, deduplicate_title,
+    CATEGORY_EMOJI,
+)
 
 load_dotenv()
 
-API_ID = os.getenv("TELEGRAM_API_ID")
-API_HASH = os.getenv("TELEGRAM_API_HASH")
+API_ID         = os.getenv("TELEGRAM_API_ID")
+API_HASH       = os.getenv("TELEGRAM_API_HASH")
 SESSION_STRING = os.getenv("TELEGRAM_SESSION")
 
 WATCHLIST_PATH = Path(__file__).resolve().parent.parent / "watchlist.json"
-
-# How far back to look each run (should be >= cron interval + margin)
-LOOKBACK_MINUTES = 45  # 30-min cron + 15 min margin
-
-CATEGORY_EMOJI = {
-    "electronics": "📱",
-    "electrical":  "🔌",
-    "food":        "🍽️",
-    "sports":      "🏋️",
-}
-
-# Food platform detection for smart categorization
-FOOD_PLATFORMS = {
-    "swiggy":    {"name": "Swiggy",           "emoji": "🛵"},
-    "zomato":    {"name": "Zomato",            "emoji": "🍕"},
-    "blinkit":   {"name": "Blinkit",           "emoji": "⚡"},
-    "zepto":     {"name": "Zepto",             "emoji": "🟣"},
-    "bigbasket": {"name": "BigBasket",         "emoji": "🛒"},
-    "big basket":{"name": "BigBasket",         "emoji": "🛒"},
-    "dominos":   {"name": "Dominos",           "emoji": "🍕"},
-    "domino's":  {"name": "Dominos",           "emoji": "🍕"},
-    "instamart": {"name": "Swiggy Instamart",  "emoji": "📦"},
-    "faasos":    {"name": "Faasos",            "emoji": "🌯"},
-    "pizza hut": {"name": "Pizza Hut",         "emoji": "🍕"},
-    "kfc":       {"name": "KFC",               "emoji": "🍗"},
-    "mcdonald":  {"name": "McDonald's",        "emoji": "🍔"},
-    "burger king":{"name": "Burger King",      "emoji": "🍔"},
-}
+LOOKBACK_MINUTES = 45   # 30-min cron + 15-min margin
 
 
 def load_watchlist():
@@ -76,129 +50,146 @@ def load_watchlist():
 
 
 def has_deal_signal(text: str, signal_words: list) -> bool:
-    """Returns True if the message looks like a deal/discount announcement."""
     lower = text.lower()
-    return any(signal in lower for signal in signal_words)
+    return any(s in lower for s in signal_words)
 
 
-def extract_coupon_code(text: str) -> str:
-    """Try to extract a coupon code from message text."""
-    # Pattern: "Use code: XXXXX" or "Code: XXXXX" or "Apply: XXXXX"
-    patterns = [
-        r'(?:use|apply|code|coupon|promo)[:\s]+([A-Z][A-Z0-9]{3,14})',
-        r'(?:code|coupon|promo)[\s:]+([A-Z][A-Z0-9]{3,14})',
-        r'"([A-Z][A-Z0-9]{4,14})"',
-        r'\b([A-Z][A-Z0-9]{5,14})\b',  # Standalone ALLCAPS word
-    ]
-    for pattern in patterns:
-        match = re.search(pattern, text, re.IGNORECASE)
-        if match:
-            code = match.group(1).upper()
-            # Skip common false positives
-            if code not in ("TERMS", "ABOUT", "LOGIN", "SHARE", "CLICK",
-                           "CLOSE", "EMAIL", "PHONE", "ORDER", "APPLY",
-                           "CHECK", "INDIA", "AMAZON", "FLIPKART"):
-                return code
-    return ""
-
-
-import re
-
-
-def message_matches_product(text: str, keywords: list[str]) -> bool:
+def message_matches_product(text: str, keywords: list[str]) -> tuple[bool, int]:
+    """Returns (matched, count_of_keywords_matched)."""
     text_lower = text.lower()
-    return any(kw.lower() in text_lower for kw in keywords)
+    matched = [kw for kw in keywords if kw.lower() in text_lower]
+    return bool(matched), len(matched)
 
 
 def get_matching_categories(text: str, category_keywords: dict) -> list[str]:
-    """Returns all categories whose keywords appear in the message text."""
     text_lower = text.lower()
-    matched = []
-    for category, keywords in category_keywords.items():
-        if any(kw.lower() in text_lower for kw in keywords):
-            matched.append(category)
-    return matched
-
-
-def detect_food_platforms(text: str) -> list[dict]:
-    """Returns all food platforms mentioned in the text."""
-    text_lower = text.lower()
-    found = []
-    seen = set()
-    for key, info in FOOD_PLATFORMS.items():
-        if key in text_lower and info["name"] not in seen:
-            found.append(info)
-            seen.add(info["name"])
-    return found
+    return [
+        cat for cat, kws in category_keywords.items()
+        if any(kw.lower() in text_lower for kw in kws)
+    ]
 
 
 async def scan_channels():
-    watchlist = load_watchlist()
-    channels = watchlist.get("telegram_channels", [])
-    products = watchlist.get("products", [])
-    category_keywords = watchlist.get("category_keywords", {})
-    signal_words = watchlist.get("deal_signal_words", [
-        "%", "off", "discount", "coupon", "deal", "offer", "sale",
-        "loot", "₹", "free", "lowest", "cashback"
-    ])
+    watchlist       = load_watchlist()
+    channels_raw    = watchlist.get("telegram_channels", [])
+    products        = watchlist.get("products", [])
+    category_kws    = watchlist.get("category_keywords", {})
+    signal_words    = watchlist.get("deal_signal_words", [])
+    rules           = watchlist.get("matching_rules", {})
+    min_reliability = rules.get("min_reliability_score", 5)
+    min_score       = rules.get("min_priority_score_to_alert", 40)
+    dedup_hours     = rules.get("dedup_window_hours", 6)
+    weights         = rules.get("priority_weights", None)
+
+    # Support both old string-list format and new object format
+    channels = []
+    for ch in channels_raw:
+        if isinstance(ch, str):
+            channels.append({"handle": ch, "reliability_score": 7, "name": ch})
+        else:
+            channels.append(ch)
+
+    # Sort by reliability DESC, filter out weak channels
+    channels = sorted(
+        [c for c in channels if c.get("reliability_score", 5) >= min_reliability],
+        key=lambda c: c.get("reliability_score", 5),
+        reverse=True,
+    )
 
     if not API_ID or not API_HASH or not SESSION_STRING:
-        print("[telegram_monitor] Missing Telegram API credentials — "
-              "run scripts/generate_session.py first. Skipping.")
+        print("[telegram_monitor] Missing API credentials — run generate_session.py first.")
         return
 
     client = TelegramClient(StringSession(SESSION_STRING), int(API_ID), API_HASH)
     await client.start()
 
-    cutoff = datetime.now(timezone.utc) - timedelta(minutes=LOOKBACK_MINUTES)
+    cutoff       = datetime.now(timezone.utc) - timedelta(minutes=LOOKBACK_MINUTES)
     total_alerts = 0
-    channels_ok = 0
+    channels_ok  = 0
     channels_fail = 0
 
-    for channel in channels:
-        if channel.startswith("@replace_with"):
+    # Pre-load recent titles for cross-channel dedup
+    recent_titles = get_recent_deal_titles(hours=dedup_hours)
+
+    for ch in channels:
+        handle      = ch["handle"] if isinstance(ch, dict) else ch
+        reliability = ch.get("reliability_score", 7) if isinstance(ch, dict) else 7
+
+        if handle.startswith("@replace_with"):
             continue
 
         try:
             msg_count = 0
-            async for message in client.iter_messages(channel, limit=200):
+            async for message in client.iter_messages(handle, limit=200):
                 if message.date < cutoff:
                     break
                 if not message.text:
                     continue
 
                 msg_count += 1
-                text = message.text
-                dedup_base = f"tg:{channel}:{message.id}"
+                text     = message.text
+                dedup_base = f"tg:{handle}:{message.id}"
 
-                # --- Layer 1: Specific product keyword match ---
+                # Extract structured info once per message
+                info     = extract_deal_info(text)
+                price    = info["price"]
+                disc_pct = info["discount_pct"]
+                coupon   = info["coupon_code"] or ""
+
+                # ── Layer 1: Product keyword match ─────────────────────────
                 for product in products:
-                    if message_matches_product(text, product["keywords"]):
-                        dedup_key = f"{dedup_base}:product:{product['name']}"
-                        if already_alerted(dedup_key):
-                            continue
+                    matched, match_count = message_matches_product(text, product["keywords"])
+                    if not matched:
+                        continue
 
-                        emoji = CATEGORY_EMOJI.get(product["category"], "🛒")
-                        coupon = extract_coupon_code(text)
-                        coupon_line = f"🎟️ Code spotted: <code>{coupon}</code>\n" if coupon else ""
+                    dedup_key = f"{dedup_base}:product:{product['name']}"
+                    if already_alerted(dedup_key):
+                        continue
 
-                        alert_text = (
-                            f"{emoji} <b>Product Deal Spotted!</b> — {product['name']}\n"
-                            f"━━━━━━━━━━━━━━━━━━\n"
-                            f"📍 Channel: {channel}\n"
-                            f"🏷️ Category: {product['category'].title()}\n"
-                            f"{coupon_line}\n"
-                            f"{text[:500]}\n\n"
-                            f"✅ <b>Action plan:</b>\n"
-                            f"1. Activate cashback on CashKaro/GoPaisa first\n"
-                            f"2. Check BuyHatke extension for price history\n"
-                            f"3. Stack with bank card offer for extra savings"
-                        )
-                        send_alert(alert_text)
-                        mark_alerted(dedup_key, product["name"], 0)
+                    target_price = product.get("target_price")
+                    p_score = score_deal(
+                        discount_pct=disc_pct,
+                        source_reliability=reliability,
+                        keyword_match_count=match_count,
+                        target_price=target_price,
+                        detected_price=price,
+                        weights=weights,
+                    )
+                    if p_score < min_score:
+                        continue
+
+                    # Cross-channel fuzzy dedup
+                    deal_title = f"{product['name']} {handle}"
+                    if deduplicate_title(deal_title, recent_titles):
+                        continue
+
+                    emoji = CATEGORY_EMOJI.get(product.get("category", ""), "🛒")
+                    sent = send_deal_alert(
+                        title=f"{emoji} Product Deal — {product['name']}",
+                        body=text,
+                        channel=handle,
+                        category=product.get("category", ""),
+                        coupon_code=coupon,
+                        price=price,
+                        discount_pct=disc_pct,
+                        priority_score=p_score,
+                        product_url=product.get("url", ""),
+                        action_steps=[
+                            "Activate cashback on CashKaro/GoPaisa first",
+                            "Check BuyHatke extension for price history",
+                            "Stack with bank card offer for extra savings",
+                        ],
+                    )
+                    if sent:
+                        mark_alerted(dedup_key, product["name"], price or 0,
+                                     priority_score=p_score, discount_percent=disc_pct or 0,
+                                     source_reliability=reliability,
+                                     category=product.get("category", ""))
+                        record_deal_title(deal_title, handle)
+                        recent_titles.append(deal_title)
                         total_alerts += 1
 
-                # --- Layer 2: Food platform mention + deal signal ---
+                # ── Layer 2: Food platform + deal signal ──────────────────
                 if has_deal_signal(text, signal_words):
                     food_platforms = detect_food_platforms(text)
                     for fp in food_platforms:
@@ -206,56 +197,99 @@ async def scan_channels():
                         if already_alerted(dedup_key):
                             continue
 
-                        coupon = extract_coupon_code(text)
-                        coupon_line = f"🎟️ Code: <code>{coupon}</code>\n" if coupon else ""
+                        deal_title = f"{fp['name']} deal {handle}"
+                        if deduplicate_title(deal_title, recent_titles):
+                            continue
 
-                        alert_text = (
-                            f"{fp['emoji']} <b>{fp['name']} Deal!</b>\n"
-                            f"━━━━━━━━━━━━━━━━━━\n"
-                            f"📍 Channel: {channel}\n"
-                            f"{coupon_line}\n"
-                            f"{text[:500]}\n\n"
-                            f"✅ Open {fp['name']} app → Apply code → "
-                            f"Pay with bank card for max savings"
+                        p_score = score_deal(
+                            discount_pct=disc_pct,
+                            source_reliability=reliability,
+                            keyword_match_count=2,
+                            target_price=None,
+                            detected_price=None,
+                            weights=weights,
                         )
-                        send_alert(alert_text)
-                        mark_alerted(dedup_key, fp["name"], 0)
-                        total_alerts += 1
+                        if p_score < min_score:
+                            continue
 
-                # --- Layer 3: Category keyword match + deal signal ---
+                        sent = send_deal_alert(
+                            title=f"{fp['emoji']} {fp['name']} Deal",
+                            body=text,
+                            channel=handle,
+                            category="food",
+                            coupon_code=coupon,
+                            price=price,
+                            discount_pct=disc_pct,
+                            priority_score=p_score,
+                            action_steps=[
+                                f"Open {fp['name']} app",
+                                f"Apply code {coupon}" if coupon else "Check offers tab",
+                                "Pay with bank card for max savings",
+                            ],
+                        )
+                        if sent:
+                            mark_alerted(dedup_key, fp["name"], price or 0,
+                                         priority_score=p_score, discount_percent=disc_pct or 0,
+                                         source_reliability=reliability, category="food")
+                            record_deal_title(deal_title, handle)
+                            recent_titles.append(deal_title)
+                            total_alerts += 1
+
+                # ── Layer 3: Category keyword + deal signal ───────────────
                 if has_deal_signal(text, signal_words):
-                    matched_cats = get_matching_categories(text, category_keywords)
+                    matched_cats = get_matching_categories(text, category_kws)
                     for cat in matched_cats:
                         dedup_key = f"{dedup_base}:cat:{cat}"
                         if already_alerted(dedup_key):
                             continue
 
-                        emoji = CATEGORY_EMOJI.get(cat, "🛒")
-                        coupon = extract_coupon_code(text)
-                        coupon_line = f"🎟️ Code: <code>{coupon}</code>\n" if coupon else ""
+                        deal_title = f"{cat} deal {handle} {message.id}"
+                        if deduplicate_title(deal_title, recent_titles):
+                            continue
 
-                        alert_text = (
-                            f"{emoji} <b>Category Deal Signal</b> — {cat.title()}\n"
-                            f"━━━━━━━━━━━━━━━━━━\n"
-                            f"📍 Channel: {channel}\n"
-                            f"{coupon_line}\n"
-                            f"{text[:500]}\n\n"
-                            f"<i>Verify this matches your wishlist before acting.</i>"
+                        p_score = score_deal(
+                            discount_pct=disc_pct,
+                            source_reliability=reliability,
+                            keyword_match_count=1,
+                            target_price=None,
+                            detected_price=None,
+                            weights=weights,
                         )
-                        send_alert(alert_text)
-                        mark_alerted(dedup_key, cat, 0)
-                        total_alerts += 1
+                        if p_score < min_score:
+                            continue
+
+                        emoji = CATEGORY_EMOJI.get(cat, "🛒")
+                        sent = send_deal_alert(
+                            title=f"{emoji} Category Deal — {cat.replace('_', ' ').title()}",
+                            body=text,
+                            channel=handle,
+                            category=cat,
+                            coupon_code=coupon,
+                            price=price,
+                            discount_pct=disc_pct,
+                            priority_score=p_score,
+                            action_steps=["Verify this matches your wishlist before acting."],
+                        )
+                        if sent:
+                            mark_alerted(dedup_key, cat, price or 0,
+                                         priority_score=p_score, discount_percent=disc_pct or 0,
+                                         source_reliability=reliability, category=cat)
+                            record_deal_title(deal_title, handle)
+                            recent_titles.append(deal_title)
+                            total_alerts += 1
 
             channels_ok += 1
-            print(f"[telegram_monitor] {channel}: scanned {msg_count} messages")
+            print(f"[telegram_monitor] {handle}: scanned {msg_count} messages")
 
         except Exception as e:
             channels_fail += 1
-            print(f"[telegram_monitor] Error reading {channel}: {e}")
+            print(f"[telegram_monitor] Error reading {handle}: {e}")
 
     await client.disconnect()
-    print(f"[telegram_monitor] Done. {channels_ok} channels OK, "
-          f"{channels_fail} failed, {total_alerts} alerts sent.")
+    print(
+        f"[telegram_monitor] Done. {channels_ok} channels OK, "
+        f"{channels_fail} failed, {total_alerts} alerts sent."
+    )
 
 
 if __name__ == "__main__":
