@@ -31,7 +31,7 @@ LOOKBACK_SECONDS = 3600  # 1 hour
 
 # Reddit wants a custom User-Agent or it rate-limits aggressively
 HEADERS = {
-    "User-Agent": "DealScout/1.0 (GitHub Actions bot; deal monitoring)"
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 }
 
 CATEGORY_EMOJI = {
