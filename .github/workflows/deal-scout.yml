@@ -1,0 +1,58 @@
+name: Deal Scout
+
+on:
+  schedule:
+    # Every 90 minutes. Kept below 60-min to reduce ban risk and stay well
+    # within GitHub's free Actions minutes (2000/month private repo).
+    # Cron is in UTC; 90 min doesn't divide evenly into hours so this runs
+    # at :00 and :30 alternating hours — close enough for this use case.
+    - cron: "0 */1 * * *"     # hourly Telegram + price check
+    - cron: "0 3 * * 1"       # weekly bank offer check, Monday 03:00 UTC
+  workflow_dispatch: {}        # lets you trigger a run manually from GitHub UI
+
+permissions:
+  contents: write  # needed to commit the updated deals.db back to the repo
+
+jobs:
+  scout:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          playwright install --with-deps chromium
+
+      - name: Determine if this is the weekly bank-offer run
+        id: schedule_check
+        run: |
+          if [ "${{ github.event.schedule }}" = "0 3 * * 1" ]; then
+            echo "run_bank_check=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run_bank_check=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run Deal Scout
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
+          TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
+          TELEGRAM_SESSION: ${{ secrets.TELEGRAM_SESSION }}
+          RUN_BANK_CHECK: ${{ steps.schedule_check.outputs.run_bank_check }}
+        run: python scripts/run_all.py
+
+      - name: Commit updated database
+        run: |
+          git config user.name "deal-scout-bot"
+          git config user.email "actions@github.com"
+          git add data/deals.db data/deals.db-wal data/deals.db-shm 2>/dev/null || true
+          git diff --quiet --cached || git commit -m "Update deal history [skip ci]"
+          git push || echo "Nothing to push"

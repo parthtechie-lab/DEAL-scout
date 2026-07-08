@@ -1,0 +1,190 @@
+{
+  "telegram_channels": [
+    "@lootdeals",
+    "@dealsninja",
+    "@DealsDhamaka",
+    "@Lootoffer",
+    "@BudgetBuys",
+    "@TechDealsIndia",
+    "@flipkartoffers",
+    "@AmazonOffersIndia",
+    "@DealHunterIndia",
+    "@meeshooffers",
+    "@electronicdealsindiaofficial",
+    "@sportsgeardeals"
+  ],
+  "coupon_sites": [
+    {
+      "name": "CouponDunia",
+      "url": "https://www.coupondunia.in",
+      "categories": ["electronics", "food", "sports", "electrical"]
+    },
+    {
+      "name": "GrabOn",
+      "url": "https://www.grabon.in",
+      "categories": ["electronics", "food", "sports", "electrical"]
+    },
+    {
+      "name": "CashKaro",
+      "url": "https://cashkaro.com",
+      "categories": ["electronics", "food", "sports", "electrical"]
+    }
+  ],
+  "products": [
+    {
+      "name": "boAt Rockerz 450 Bluetooth Headphone",
+      "keywords": ["boat rockerz", "boat headphone", "rockerz 450", "boat bluetooth"],
+      "url": "https://www.amazon.in/dp/B07QT6RP3D",
+      "platform": "amazon",
+      "target_price": 999,
+      "category": "electronics"
+    },
+    {
+      "name": "Realme Buds Air 5 TWS Earbuds",
+      "keywords": ["realme buds", "buds air 5", "realme tws", "realme earbuds"],
+      "url": "https://www.flipkart.com/realme-buds-air-5/p/itm123",
+      "platform": "flipkart",
+      "target_price": 2500,
+      "category": "electronics"
+    },
+    {
+      "name": "Mi 40W Fast Charger",
+      "keywords": ["mi charger", "xiaomi charger", "40w charger", "mi 40w"],
+      "url": "https://www.amazon.in/dp/B093DJQ5JF",
+      "platform": "amazon",
+      "target_price": 599,
+      "category": "electronics"
+    },
+    {
+      "name": "TP-Link TL-WR845N WiFi Router",
+      "keywords": ["tp-link router", "tl-wr845n", "wifi router", "tp link"],
+      "url": "https://www.amazon.in/dp/B01HKPYOU4",
+      "platform": "amazon",
+      "target_price": 1100,
+      "category": "electronics"
+    },
+    {
+      "name": "Syska LED Bulb 9W Pack of 6",
+      "keywords": ["syska bulb", "led bulb", "syska led", "9w bulb"],
+      "url": "https://www.amazon.in/dp/B07P6TVRM5",
+      "platform": "amazon",
+      "target_price": 299,
+      "category": "electrical"
+    },
+    {
+      "name": "Havells Extension Cord 6-Socket",
+      "keywords": ["havells extension", "extension cord", "havells power strip", "6 socket"],
+      "url": "https://www.amazon.in/dp/B00Q9SDB9C",
+      "platform": "amazon",
+      "target_price": 399,
+      "category": "electrical"
+    },
+    {
+      "name": "Anchor Roma Switches (10A, Pack of 5)",
+      "keywords": ["anchor roma", "anchor switch", "roma switch", "10a switch"],
+      "url": "https://www.amazon.in/dp/B07F2YDYL1",
+      "platform": "amazon",
+      "target_price": 299,
+      "category": "electrical"
+    },
+    {
+      "name": "Tata Sampann Chana Dal 1kg",
+      "keywords": ["tata sampann", "chana dal", "tata dal", "sampann chana"],
+      "url": "https://www.amazon.in/dp/B07CNHFCF3",
+      "platform": "amazon",
+      "target_price": 95,
+      "category": "food"
+    },
+    {
+      "name": "Saffola Gold Oil 5 Litre",
+      "keywords": ["saffola oil", "saffola gold", "5 litre oil", "cooking oil deal"],
+      "url": "https://www.amazon.in/dp/B0842QT98Q",
+      "platform": "amazon",
+      "target_price": 750,
+      "category": "food"
+    },
+    {
+      "name": "Nescafe Gold 200g Coffee",
+      "keywords": ["nescafe gold", "nescafe coffee", "instant coffee deal", "nescafe 200g"],
+      "url": "https://www.flipkart.com/nescafe-gold/p/itm123",
+      "platform": "flipkart",
+      "target_price": 499,
+      "category": "food"
+    },
+    {
+      "name": "Nivia Football Size 5",
+      "keywords": ["nivia football", "football size 5", "nivia ball", "nivia fb"],
+      "url": "https://www.amazon.in/dp/B00YQ6VZWY",
+      "platform": "amazon",
+      "target_price": 499,
+      "category": "sports"
+    },
+    {
+      "name": "Cosco Cricket Bat Kashmir Willow",
+      "keywords": ["cosco bat", "cricket bat", "kashmir willow", "cosco cricket"],
+      "url": "https://www.amazon.in/dp/B076DP9DLZ",
+      "platform": "amazon",
+      "target_price": 799,
+      "category": "sports"
+    },
+    {
+      "name": "Boldfit Gym Gloves",
+      "keywords": ["boldfit gloves", "gym gloves", "workout gloves", "fitness gloves"],
+      "url": "https://www.amazon.in/dp/B08SZNPHQJ",
+      "platform": "amazon",
+      "target_price": 299,
+      "category": "sports"
+    },
+    {
+      "name": "Strauss Yoga Mat 6mm",
+      "keywords": ["strauss yoga", "yoga mat", "6mm yoga mat", "strauss mat"],
+      "url": "https://www.amazon.in/dp/B07NWQB7DZ",
+      "platform": "amazon",
+      "target_price": 499,
+      "category": "sports"
+    }
+  ],
+  "category_keywords": {
+    "electronics": [
+      "earphone", "earbuds", "headphone", "speaker", "bluetooth", "TWS",
+      "mobile", "phone", "charger", "power bank", "laptop", "tablet",
+      "smartwatch", "LED TV", "router", "wifi", "camera", "pen drive",
+      "hard disk", "SSD", "keyboard", "mouse", "monitor", "webcam"
+    ],
+    "electrical": [
+      "LED bulb", "tube light", "extension cord", "power strip", "switch",
+      "socket", "MCB", "inverter", "UPS", "stabilizer", "electric fan",
+      "ceiling fan", "wiring", "cable", "wire", "regulator", "dimmer"
+    ],
+    "food": [
+      "dal", "oil", "ghee", "rice", "atta", "flour", "spice", "masala",
+      "coffee", "tea", "biscuit", "chocolate", "dry fruit", "nuts",
+      "protein powder", "supplement", "juice", "sauce", "ketchup", "pasta",
+      "noodles", "instant food", "snack", "cereal"
+    ],
+    "sports": [
+      "cricket bat", "cricket ball", "football", "badminton", "shuttle",
+      "yoga mat", "gym gloves", "resistance band", "dumbbell", "kettlebell",
+      "treadmill", "cycle", "bicycle", "skipping rope", "sports shoes",
+      "jersey", "shorts", "gym wear", "protein", "whey", "fitness"
+    ]
+  },
+  "bank_offer_pages": [
+    {
+      "bank": "HDFC",
+      "url": "https://www.hdfcbank.com/personal/pay/cards/credit-cards/smartbuy-offers"
+    },
+    {
+      "bank": "ICICI",
+      "url": "https://www.icicibank.com/offers"
+    },
+    {
+      "bank": "SBI",
+      "url": "https://www.sbi.co.in/web/personal-banking/cards/credit-card/credit-card-offers"
+    },
+    {
+      "bank": "Kotak",
+      "url": "https://www.kotak.com/en/personal-banking/cards/credit-cards/credit-card-offers.html"
+    }
+  ]
+}
