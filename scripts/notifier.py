@@ -36,9 +36,9 @@ def send_alert(text: str, force: bool = False) -> bool:
         print("[notifier] Message would have been:\n", text)
         return False
 
-    # if not force and is_quiet_hours():
-    #     print("[notifier] Quiet hours active (22:00–08:00 IST) — alert suppressed.")
-    #     return False
+    if not force and is_quiet_hours():
+        print("[notifier] Quiet hours active (22:00–08:00 IST) — alert suppressed.")
+        return False
 
     url  = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     resp = requests.post(

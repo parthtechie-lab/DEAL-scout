@@ -184,6 +184,9 @@ def main():
         send_run_summary_alert()
     print("="*60)
 
+    if failed_steps:
+        sys.exit(1)
+
 
 if __name__ == "__main__":
     main()
