@@ -20,6 +20,13 @@ except ModuleNotFoundError:
 import bank_offers
 import asyncio
 
+try:
+    import food_coupon_scraper
+    HAS_FOOD_SCRAPER = True
+except ModuleNotFoundError:
+    print("[run_all] Warning: food_coupon_scraper could not be loaded (likely missing Playwright). Skipping food coupons.")
+    HAS_FOOD_SCRAPER = False
+
 RUN_BANK_CHECK = os.getenv("RUN_BANK_CHECK", "false").lower() == "true"
 
 
@@ -40,6 +47,15 @@ def main():
             print(f"[run_all] Price check failed: {e}")
     else:
         print("[run_all] Skipping price check (module unavailable).")
+
+    if HAS_FOOD_SCRAPER:
+        print("[run_all] Scraping food platform coupons (Swiggy/Zomato/Blinkit/Zepto/BigBasket/Dominos)...")
+        try:
+            food_coupon_scraper.run()
+        except Exception as e:
+            print(f"[run_all] Food coupon scrape failed: {e}")
+    else:
+        print("[run_all] Skipping food coupon scrape (module unavailable).")
 
     if RUN_BANK_CHECK:
         print("[run_all] Checking bank offers...")

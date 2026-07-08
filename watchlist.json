@@ -2,7 +2,13 @@
   "telegram_channels": [
     "@Flipshope",
     "@TrickXpert",
-    "@tech24deals"
+    "@tech24deals",
+    "@CoolzTricks",
+    "@GrabOnIndiaOfficial",
+    "@DesiDimeDeals",
+    "@lootdealsindia",
+    "@SwiggyZomatoOffers",
+    "@ZeptoBlinkitDeals"
   ],
   "coupon_sites": [
     {
@@ -151,7 +157,12 @@
       "dal", "oil", "ghee", "rice", "atta", "flour", "spice", "masala",
       "coffee", "tea", "biscuit", "chocolate", "dry fruit", "nuts",
       "protein powder", "supplement", "juice", "sauce", "ketchup", "pasta",
-      "noodles", "instant food", "snack", "cereal"
+      "noodles", "instant food", "snack", "cereal",
+      "swiggy", "zomato", "blinkit", "zepto", "bigbasket", "dominos", "domino's",
+      "instamart", "dunzo", "grocery", "food delivery", "order food",
+      "free delivery", "flat off food", "restaurant", "pizza", "burger",
+      "biryani", "thali", "meal", "combo", "lunch", "dinner", "breakfast",
+      "swiggy one", "zomato gold", "pro membership"
     ],
     "sports": [
       "cricket bat", "cricket ball", "football", "badminton", "shuttle",
