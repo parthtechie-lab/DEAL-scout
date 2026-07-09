@@ -32,9 +32,7 @@ def send_alert(text: str, force: bool = False) -> bool:
     Returns True on success, False on failure/quiet-hours skip.
     """
     if not BOT_TOKEN or not CHAT_ID:
-        print("[notifier] Missing TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID — skipping.")
-        print("[notifier] Message would have been:\n", text)
-        return False
+        raise ValueError("[notifier] Missing TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID")
 
     if not force and is_quiet_hours():
         print("[notifier] Quiet hours active (22:00–08:00 IST) — alert suppressed.")

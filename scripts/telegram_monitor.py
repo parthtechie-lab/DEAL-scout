@@ -96,9 +96,8 @@ async def scan_channels():
         reverse=True,
     )
 
-    if not API_ID or not API_HASH or not SESSION_STRING:
-        print("[telegram_monitor] Missing API credentials — run generate_session.py first.")
-        return
+    if not os.getenv("TELEGRAM_API_ID") or not os.getenv("TELEGRAM_SESSION"):
+        raise ValueError("Missing API credentials — run generate_session.py first.")
 
     client = TelegramClient(StringSession(SESSION_STRING), int(API_ID), API_HASH)
     await client.start()
