@@ -16,6 +16,9 @@ from dotenv import load_dotenv
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
 
+import warnings
+warnings.filterwarnings("ignore", category=FutureWarning, module="google.generativeai")
+
 import google.generativeai as genai
 from google.generativeai.types import generation_types
 
@@ -185,4 +188,7 @@ async def main():
     await client.run_until_disconnected()
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\n[*] Streamer stopped by user. Shutting down gracefully.")
