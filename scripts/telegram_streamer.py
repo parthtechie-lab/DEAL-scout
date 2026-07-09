@@ -141,9 +141,10 @@ async def main():
             return
 
         # 2. Filtering
+        min_score = int(os.getenv("MIN_PRIORITY_SCORE", 85))
         score = deal_info.get("priority_score", 0)
-        if score < 50:
-            print(f" -> AI scored this a {score}/100. Too low priority. Skipping.")
+        if score < min_score:
+            print(f" -> AI scored this a {score}/100 (Threshold: {min_score}). Average deal. Skipping.")
             return
 
         # 3. Deduplication
