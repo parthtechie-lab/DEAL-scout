@@ -38,21 +38,25 @@ def send_alert(text: str, force: bool = False) -> bool:
         print("[notifier] Quiet hours active (22:00–08:00 IST) — alert suppressed.")
         return False
 
-    url  = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    resp = requests.post(
-        url,
-        data={
-            "chat_id":                  CHAT_ID,
-            "text":                     text,
-            "parse_mode":               "HTML",
-            "disable_web_page_preview": False,
-        },
-        timeout=15,
-    )
-    if resp.status_code != 200:
-        print(f"[notifier] Send failed: {resp.status_code} {resp.text}")
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    try:
+        resp = requests.post(
+            url,
+            data={
+                "chat_id":                  CHAT_ID,
+                "text":                     text,
+                "parse_mode":               "HTML",
+                "disable_web_page_preview": False,
+            },
+            timeout=15,
+        )
+        if resp.status_code != 200:
+            print(f"[notifier] Send failed: {resp.status_code} {resp.text}")
+            return False
+        return True
+    except Exception as e:
+        print(f"[notifier] Network error sending alert: {e}")
         return False
-    return True
 
 
 def send_deal_alert(
