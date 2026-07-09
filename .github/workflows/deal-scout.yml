@@ -16,8 +16,8 @@ on:
   schedule:
     # Coupon-only scan every 15 minutes (pure Python, ~30 sec per run)
     - cron: "*/15 * * * *"
-    # Full scan (Telegram + Reddit + Coupon) every 60 minutes — NO Playwright
-    - cron: "0 * * * *"
+    # Full scan (Telegram + Reddit + Coupon) every 45 minutes — NO Playwright
+    - cron: "*/45 * * * *"
     # Weekly bank offer check — Monday 03:00 UTC
     - cron: "0 3 * * 1"
   workflow_dispatch:
