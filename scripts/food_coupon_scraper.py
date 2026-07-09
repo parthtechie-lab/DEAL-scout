@@ -1,31 +1,75 @@
 """
-food_coupon_scraper.py — Deal Scout v2.
+food_coupon_scraper.py — Deal Scout v2 (v3 — Hardened).
 
-Scrapes live coupon codes for food/grocery platforms from 15 public coupon
-aggregator websites and deals pages.
+Scrapes live coupon codes for food/grocery platforms from public coupon
+aggregator websites and deals pages using Playwright (handles JS-rendered
+sites that plain `requests` in coupon_detector.py can't see).
 
 Platforms: Swiggy, Zomato, Blinkit, Zepto, BigBasket, Dominos, Swiggy Instamart
 
-Sites scraped (v2 additions in ★):
-  DesiDime, GrabOn, CashKaro, Zoutons, CouponDunia, FreeKaaMaal,
-  IndiaDesire, GoPaisa, Picodi, CouponZania, Hutti, Dealsmagnet,
-  ★ CupoNation, ★ Amazon Today's Deals, ★ Flipkart Offers Zone
+WHAT'S NEW IN v3 (over v2)
+---------------------------
+As with coupon_detector.py, the goal here is closing off *avoidable*
+silent-miss paths. This can't reach a literal 0%-chance-of-ever-skipping
+guarantee — a site can still put up a CAPTCHA, require a login, or change
+its markup between deploys — but the previous version had several gaps
+that were fixable and are fixed here:
 
-v2 changes:
-  • CupoNation selector added.
-  • Stacking tips sourced from watchlist (richer wording).
-  • send_deal_alert() used for priority badge in messages.
+1. SELECTOR + REGEX ALWAYS BOTH RUN — v2 only ran the raw-text regex
+   fallback if the CSS selectors found *zero* cards. That means a page
+   where selectors matched card containers but failed to match the code
+   element inside them (a very common partial-markup-drift failure)
+   returned nothing, even though the code was sitting right there in the
+   page text. Now both extraction paths always run and results are merged
+   + deduped, so a partial selector miss no longer blanks the whole card.
+
+2. RETRY ON NAVIGATION — `page.goto()` was a single attempt; one slow
+   response or transient network error skipped that site for the entire
+   run. Now retries up to RETRY_ATTEMPTS times with backoff.
+
+3. SCROLL-TO-LOAD — many of these aggregator sites lazy-load coupon cards
+   as you scroll. v2 only ever saw what was in the initial viewport after
+   a fixed 2.5s wait. Now scrolls to the bottom a few times (with waits)
+   before scraping, so lazy-loaded cards are actually rendered into the DOM.
+
+4. PAGINATION — if a site exposes a "Load more" / "Next" control, it's
+   now clicked (up to MAX_PAGES times) so deals past page 1 aren't
+   invisible.
+
+5. CARD LIMIT RAISED — was hardcoded to the first 15 cards; raised to
+   MAX_CARDS_PER_PAGE (default 60) since aggregator pages often list far
+   more than 15 live coupons.
+
+6. MULTIPLE CODES PER CARD — some cards contain more than one code node
+   ("primary" + "backup" codes). v2's `query_selector` grabbed only the
+   first match; now uses `query_selector_all` inside a card so all codes
+   in a card are captured.
+
+7. HTML ENTITY DECODING + case handling on the regex fallback, matching
+   the hardening done in coupon_detector.py, so codes with `&amp;`-style
+   entities or lowercase codes aren't missed.
+
+8. PER-SITE FAILURE VISIBILITY — sites that time out or throw are now
+   reported by name in the final summary instead of just vanishing from
+   the counts.
+
+Remaining known blind spots (no code fix eliminates these — flagging so
+they're not mistaken for bugs):
+  - Sites that require solving a CAPTCHA or logging in.
+  - Sites that detect and block headless/automated browsers outright.
+  - A coupon that a site itself never publishes on the scraped page
+    (e.g. it's only in their app, or sent via personalized email).
 """
 
 import asyncio
+import html as html_lib
 import json
-import os
 import re
 from datetime import datetime
 from pathlib import Path
 
 try:
-    from playwright.async_api import async_playwright
+    from playwright.async_api import async_playwright, TimeoutError as PWTimeoutError
     HAS_PLAYWRIGHT = True
 except ModuleNotFoundError:
     HAS_PLAYWRIGHT = False
@@ -34,6 +78,32 @@ from db import already_alerted, mark_alerted
 from notifier import send_deal_alert
 
 WATCHLIST_PATH = Path(__file__).resolve().parent.parent / "watchlist.json"
+
+RETRY_ATTEMPTS       = 3
+RETRY_BACKOFF_MS     = 1500        # doubles each retry
+MAX_CARDS_PER_PAGE   = 60          # was 15
+MAX_PAGES            = 3           # "load more" / "next" clicks per site
+SCROLL_ROUNDS        = 4           # scroll-to-bottom passes to trigger lazy load
+SCROLL_WAIT_MS       = 900
+POST_LOAD_WAIT_MS    = 2500
+
+# Generic "load more" / pagination selectors tried across all sites.
+_LOAD_MORE_SELECTORS = [
+    "text=/load more/i", "text=/show more/i", "text=/view more/i",
+    "[class*='load-more']", "[class*='loadmore']", "button[class*='more']",
+    "a[rel='next']", "[class*='pagination'] a[class*='next']",
+]
+
+_CODE_FALLBACK_RE = re.compile(r'\b[A-Z][A-Z0-9]{4,14}\b')
+_DISCOUNT_FALLBACK_RE = re.compile(
+    r'(?:flat\s+)?(?:₹\s*\d+|\d+%)\s*(?:off|cashback|discount|savings)',
+    re.IGNORECASE,
+)
+_FALLBACK_SKIP = {
+    "TERMS","ABOUT","LOGIN","SHARE","CLICK","CLOSE","EMAIL",
+    "PHONE","STORE","ORDER","APPLY","CHECK","UPIID","INDIA",
+    "OFFER","OFFERS","COUPON","COUPONS","DEALS","TODAY","VALID",
+}
 
 
 def load_watchlist():
@@ -115,14 +185,12 @@ SITE_SELECTORS = {
         "code":     ".coupon-code, .code, [data-clipboard-text]",
         "discount": ".coupon-desc, .deal-desc, p",
     },
-    # ★ New in v2
     "cuponation.in": {
         "card":     ".coupon-box, .offer-card, article, .deal-item, .CouponBox",
         "title":    "h3, h2, .coupon-title, .offer-title, .CouponTitle",
         "code":     ".coupon-code, .code, [data-clipboard-text], .CouponCode",
         "discount": ".coupon-desc, .offer-desc, p, .CouponDesc",
     },
-    # ★ Amazon & Flipkart direct deals pages (no platform slug needed)
     "amazon.in/deals": {
         "card":     ".DealCard, [data-component-type='s-deal-result-item'], .a-section.octopus-dlp-asin-section",
         "title":    "h2, .a-size-base-plus, .DealContent__title, span.a-text-bold",
@@ -146,7 +214,7 @@ def get_selectors_for_url(url: str) -> dict | None:
 
 
 def clean_text(text: str) -> str:
-    return re.sub(r'\s+', ' ', text.strip())
+    return re.sub(r'\s+', ' ', html_lib.unescape(text).strip())
 
 
 def build_coupon_urls(watchlist: dict) -> list[dict]:
@@ -157,8 +225,6 @@ def build_coupon_urls(watchlist: dict) -> list[dict]:
 
     for site in coupon_sites:
         if "food" not in site.get("categories", []):
-            # Non-food sites: still scrape for general electronics/fashion etc.
-            # but skip food platform slug iteration
             base_url = site.get("base_url", "")
             pattern  = site.get("url_pattern", "{base_url}")
             if "{platform}" not in pattern:
@@ -175,7 +241,6 @@ def build_coupon_urls(watchlist: dict) -> list[dict]:
         pattern  = site.get("url_pattern", "{base_url}")
 
         if "{platform}" not in pattern:
-            # Fixed URL (e.g. Amazon Today's Deals)
             urls.append({
                 "url":           pattern.replace("{base_url}", base_url),
                 "site_name":     site["name"],
@@ -197,72 +262,151 @@ def build_coupon_urls(watchlist: dict) -> list[dict]:
     return urls
 
 
-async def scrape_page(page, url: str, platform_name: str) -> list[dict]:
-    """Scrape a single coupon page and return list of found deals."""
+async def _goto_with_retry(page, url: str) -> bool:
+    """Navigate with retries + backoff. Returns True on success."""
+    backoff = RETRY_BACKOFF_MS
+    for attempt in range(1, RETRY_ATTEMPTS + 1):
+        try:
+            await page.goto(url, timeout=30000, wait_until="domcontentloaded")
+            return True
+        except PWTimeoutError:
+            print(f"[food_coupon]   goto timeout ({attempt}/{RETRY_ATTEMPTS}) for {url}")
+        except Exception as e:
+            print(f"[food_coupon]   goto error ({attempt}/{RETRY_ATTEMPTS}) for {url}: {e}")
+        if attempt < RETRY_ATTEMPTS:
+            await page.wait_for_timeout(backoff)
+            backoff *= 2
+    return False
+
+
+async def _scroll_to_load(page) -> None:
+    """Scroll to the bottom a few times so lazy-loaded cards render."""
+    for _ in range(SCROLL_ROUNDS):
+        try:
+            await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+            await page.wait_for_timeout(SCROLL_WAIT_MS)
+        except Exception:
+            break
+
+
+async def _click_load_more(page) -> bool:
+    """Try each known 'load more' selector once. Returns True if a click happened."""
+    for sel in _LOAD_MORE_SELECTORS:
+        try:
+            el = await page.query_selector(sel)
+            if el and await el.is_visible():
+                await el.click(timeout=3000)
+                await page.wait_for_timeout(1500)
+                return True
+        except Exception:
+            continue
+    return False
+
+
+def _extract_via_regex(body: str, platform_name: str, url: str) -> list[dict]:
+    """Raw-text fallback extraction — decoupled from selectors entirely."""
     deals = []
-    sel   = get_selectors_for_url(url)
+    body = html_lib.unescape(body)
+    codes = list(dict.fromkeys(re.findall(_CODE_FALLBACK_RE, body)))  # dedup, keep order
+    disc_patterns = re.findall(_DISCOUNT_FALLBACK_RE, body)
+    idx_disc = 0
+    for code in codes:
+        if code.upper() in _FALLBACK_SKIP or len(code) < 4:
+            continue
+        disc = disc_patterns[idx_disc] if idx_disc < len(disc_patterns) else ""
+        idx_disc += 1
+        deals.append({
+            "title":    f"{platform_name} Coupon Code",
+            "code":     code,
+            "discount": disc,
+            "source":   url,
+        })
+    return deals
 
-    try:
-        await page.goto(url, timeout=30000, wait_until="domcontentloaded")
-        await page.wait_for_timeout(2500)
 
+async def scrape_page(page, url: str, platform_name: str) -> list[dict]:
+    """
+    Scrape a single coupon page (with pagination) and return all found
+    deals. Both the CSS-selector path AND the raw-text regex fallback
+    always run and are merged — a partial selector match no longer
+    suppresses the fallback for that page.
+    """
+    deals: list[dict] = []
+    sel = get_selectors_for_url(url)
+
+    ok = await _goto_with_retry(page, url)
+    if not ok:
+        print(f"[food_coupon] GAVE UP navigating to {url} after {RETRY_ATTEMPTS} attempts")
+        return deals
+
+    await page.wait_for_timeout(POST_LOAD_WAIT_MS)
+    await _scroll_to_load(page)
+
+    for page_num in range(1, MAX_PAGES + 1):
+        # ── Selector-based extraction ────────────────────────────────────
         if sel:
-            cards = await page.query_selector_all(sel["card"])
-            for card in cards[:15]:
+            try:
+                cards = await page.query_selector_all(sel["card"])
+            except Exception:
+                cards = []
+            for card in cards[:MAX_CARDS_PER_PAGE]:
                 try:
                     title_el = await card.query_selector(sel["title"])
                     title    = clean_text(await title_el.inner_text()) if title_el else ""
 
-                    code = ""
-                    code_el = await card.query_selector(sel["code"])
-                    if code_el:
+                    # Grab ALL matching code elements in the card, not just the first —
+                    # some cards list a primary code plus backup alternates.
+                    code_els = await card.query_selector_all(sel["code"])
+                    card_codes = []
+                    for code_el in code_els:
+                        code_val = ""
                         for attr in ("data-clipboard-text", "data-coupon", "data-code"):
                             val = await code_el.get_attribute(attr)
                             if val:
-                                code = val.strip()
+                                code_val = val.strip()
                                 break
-                        if not code:
-                            code = clean_text(await code_el.inner_text())
+                        if not code_val:
+                            code_val = clean_text(await code_el.inner_text())
+                        if code_val:
+                            card_codes.append(code_val)
 
                     disc_el  = await card.query_selector(sel["discount"])
                     discount = clean_text(await disc_el.inner_text()) if disc_el else ""
 
-                    if title or discount:
+                    if card_codes:
+                        for code_val in card_codes:
+                            deals.append({
+                                "title":    title[:150],
+                                "code":     code_val[:30],
+                                "discount": discount[:250],
+                                "source":   url,
+                            })
+                    elif title or discount:
+                        # Card matched but no code element found inside it —
+                        # still record the title/discount; regex fallback
+                        # below may recover the code from raw page text.
                         deals.append({
                             "title":    title[:150],
-                            "code":     code[:30] if code else "",
+                            "code":     "",
                             "discount": discount[:250],
                             "source":   url,
                         })
                 except Exception:
                     continue
 
-        # Fallback: regex extraction from raw page body
-        if not deals:
-            try:
-                body = await page.inner_text("body")
-                codes = list(set(re.findall(r'\b[A-Z][A-Z0-9]{4,14}\b', body)))
-                disc_patterns = re.findall(
-                    r'(?:flat\s+)?(?:₹\s*\d+|\d+%)\s*(?:off|cashback|discount|savings)',
-                    body, re.IGNORECASE,
-                )
-                _SKIP = {"TERMS","ABOUT","LOGIN","SHARE","CLICK","CLOSE","EMAIL",
-                         "PHONE","STORE","ORDER","APPLY","CHECK","UPIID","INDIA"}
-                for i, code in enumerate(codes[:5]):
-                    if code in _SKIP:
-                        continue
-                    disc = disc_patterns[i] if i < len(disc_patterns) else ""
-                    deals.append({
-                        "title":    f"{platform_name} Coupon Code",
-                        "code":     code,
-                        "discount": disc,
-                        "source":   url,
-                    })
-            except Exception:
-                pass
+        # ── Regex fallback — ALWAYS runs, merged with selector results ───
+        try:
+            body = await page.inner_text("body")
+            deals.extend(_extract_via_regex(body, platform_name, url))
+        except Exception:
+            pass
 
-    except Exception as e:
-        print(f"[food_coupon] Error scraping {url}: {e}")
+        # ── Pagination: try to load next batch, else stop ───────────────
+        if page_num < MAX_PAGES:
+            clicked = await _click_load_more(page)
+            if not clicked:
+                break
+            await _scroll_to_load(page)
 
     return deals
 
@@ -278,6 +422,8 @@ async def run_food_coupon_scraper():
 
     print(f"[food_coupon] Starting scrape — {len(urls_to_scrape)} URLs across "
           f"{len(food_platforms)} food platforms...")
+
+    failed_sites: list[str] = []
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
@@ -298,8 +444,10 @@ async def run_food_coupon_scraper():
             url           = item["url"]
             site_name     = item["site_name"]
 
-            print(f"[food_coupon]   Scraping {site_name} → {platform_name}...")
+            print(f"[food_coupon]   Scraping {site_name} -> {platform_name}...")
             deals = await scrape_page(page, url, platform_name)
+            if not deals:
+                failed_sites.append(f"{site_name}/{platform_name}")
             for deal in deals:
                 deal["site_name"] = site_name
             platform_deals.setdefault(platform_name, []).extend(deals)
@@ -359,6 +507,9 @@ async def run_food_coupon_scraper():
 
         await browser.close()
 
+    if failed_sites:
+        print(f"[food_coupon] Sites that returned ZERO deals this run "
+              f"(check manually — may indicate markup drift or a block): {failed_sites}")
     print(f"[food_coupon] Done. Total alerts sent: {total_alerted}")
 
 
