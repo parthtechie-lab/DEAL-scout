@@ -75,6 +75,7 @@ async def scan_channels():
     products        = watchlist.get("products", [])
     category_kws    = watchlist.get("category_keywords", {})
     signal_words    = watchlist.get("deal_signal_words", [])
+    loot_signals    = watchlist.get("universal_loot_signals", [])
     rules           = watchlist.get("matching_rules", {})
     min_reliability = rules.get("min_reliability_score", 5)
     min_score       = rules.get("min_priority_score_to_alert", 40)
@@ -134,6 +135,42 @@ async def scan_channels():
                 price    = info["price"]
                 disc_pct = info["discount_pct"]
                 coupon   = info["coupon_code"] or ""
+                
+                alert_sent_for_msg = False
+
+                # ── Layer 4: Universal Loot Catcher (Highest Priority) ────────
+                if has_deal_signal(text, loot_signals):
+                    dedup_key = f"{dedup_base}:loot:universal"
+                    if not already_alerted(dedup_key):
+                        deal_title = f"Loot/Glitch {handle} {message.id}"
+                        if not deduplicate_title(deal_title, recent_titles):
+                            p_score = 95  # Massive priority bypass
+                            
+                            sent = send_deal_alert(
+                                title="🚨 LOOT / GLITCH DETECTED",
+                                body=text,
+                                channel=handle,
+                                category="loot",
+                                coupon_code=coupon,
+                                price=price,
+                                discount_pct=disc_pct,
+                                priority_score=p_score,
+                                action_steps=[
+                                    "ACT FAST: Glitches/Loots expire in minutes!",
+                                    "Verify the final price on the checkout page before paying."
+                                ],
+                            )
+                            if sent:
+                                mark_alerted(dedup_key, "loot", price or 0,
+                                             priority_score=p_score, discount_percent=disc_pct or 0,
+                                             source_reliability=reliability, category="loot")
+                                record_deal_title(deal_title, handle)
+                                recent_titles.append(deal_title)
+                                total_alerts += 1
+                                alert_sent_for_msg = True
+
+                if alert_sent_for_msg:
+                    continue
 
                 # ── Layer 1: Product keyword match ─────────────────────────
                 for product in products:
@@ -191,9 +228,14 @@ async def scan_channels():
                         if coupon:
                             mark_alerted(f"code:product:{product['name']}:{coupon}",
                                          product["name"], price or 0)
-                        record_deal_title(deal_title, handle)
-                        recent_titles.append(deal_title)
-                        total_alerts += 1
+                            record_deal_title(deal_title, handle)
+                            recent_titles.append(deal_title)
+                            total_alerts += 1
+                            alert_sent_for_msg = True
+                            break
+
+                if alert_sent_for_msg:
+                    continue
 
                 # ── Layer 2: Food platform + deal signal ──────────────────
                 if has_deal_signal(text, signal_words):
@@ -240,6 +282,11 @@ async def scan_channels():
                             record_deal_title(deal_title, handle)
                             recent_titles.append(deal_title)
                             total_alerts += 1
+                            alert_sent_for_msg = True
+                            break
+
+                if alert_sent_for_msg:
+                    continue
 
                 # ── Layer 3: Category keyword + deal signal ───────────────
                 if has_deal_signal(text, signal_words):

@@ -128,6 +128,10 @@
     "₹29","₹49","₹99","almost free","maha loot","biggest sale","festival offer"
   ],
 
+  "universal_loot_signals": [
+    "price error", "glitch", "100% cashback", "loot", "bug", "lowest ever", "price drop", "free"
+  ],
+
   "extraction_patterns": {
     "price_regex":           ["₹\\s?([0-9,]+)(?:/-)?", "Rs\\.?\\s?([0-9,]+)", "INR\\s?([0-9,]+)"],
     "discount_percent_regex":["([0-9]{1,3})\\s?%\\s?(?:off|discount)"],
