@@ -76,21 +76,39 @@ async def extract_deal_ai(text: str) -> dict:
         return {"is_deal": False}
 
     prompt = f"""
-    You are an elite e-commerce deal extraction AI.
-    Analyze this Telegram message for a shopping deal, price glitch, or loot.
+    You are an elite deal-filtering AI for an Indian user. Your job is to be EXTREMELY strict.
     
+    ONLY mark is_deal=true if the deal is for ONE of the following ALLOWED categories:
+    
+    ✅ ALLOWED CATEGORIES:
+    1. ELECTRONICS / GADGETS: Earphones, headphones, speakers, Bluetooth devices, smartwatches, power banks, USB hubs, routers, SSDs, RAM, keyboards, mice, monitors, webcams, cables, adapters, hacking tools, pen drives, hard drives, laptops, mobile phones, tablets.
+    2. FOOD & GROCERY COUPONS: ANY discount/coupon/offer on Dominos, Swiggy, Zomato, Swiggy Instamart, Blinkit, JioMart, BigBasket, Zepto, Dunzo. Only Indian food delivery/grocery apps.
+    3. FASHION / APPAREL: T-shirts, shirts, lower, shorts, jeans, trousers, shoes, sneakers, sandals, clothing.
+    4. DRY FRUITS & HEALTH: Almonds, cashews, walnuts, peanuts, raisins, dates, protein powder, whey protein, mass gainer, pre-workout supplements.
+    
+    ❌ REJECTED CATEGORIES (mark is_deal=false for ALL of these):
+    - Kitchen appliances (mixer, grinder, cooker, utensils, gas stove)
+    - Furniture, beds, sofas, mattresses
+    - Books, courses, e-learning
+    - Travel, flights, hotels
+    - Skincare, beauty, makeup, shampoo, soap (unless tied to a massive 100% cashback)
+    - Toys, baby products
+    - Any non-Indian food platform (international apps)
+    - Discussion posts, news, complaints, commentary
+    - Anything vague where price/product is unclear
+
     Message:
     "{text}"
     
     Respond STRICTLY in JSON format with exactly these keys:
     {{
-      "is_deal": boolean, // True if it's a legitimate product deal, glitch, or coupon. False if it's spam/discussion.
-      "priority_score": integer, // 1 to 100. Glitches/price errors/100% cashback should be 90-100. Standard deals 50-80.
-      "product_name": string, // Clean name of the product or brand
-      "price": integer, // The final lowest numeric price (or 0 if free)
-      "coupon_code": string, // Extract any coupon code, else empty string
-      "instructions": string, // A short 1-sentence instruction on how to get the deal (e.g. "Apply code X at checkout")
-      "category": string // e.g. "electronics", "food", "fashion", "loot" (if it's a massive glitch)
+      "is_deal": boolean,
+      "priority_score": integer, // 1 to 100. Major glitches/100% cashback = 90-100. Large coupons = 70-85. Standard = 50-70.
+      "product_name": string,
+      "price": integer,
+      "coupon_code": string,
+      "instructions": string,
+      "category": string // Must be one of: "electronics", "food_coupon", "fashion", "health_nutrition", "loot"
     }}
     """
     
