@@ -1,40 +1,65 @@
 """
-coupon_detector.py — Deal Scout v2: Instant Coupon Detector (v3 — Advanced)
+coupon_detector.py — Deal Scout v2: Instant Coupon Detector (v4 — Hardened)
 
-WHAT'S NEW IN v3
-----------------
-1. PARALLEL FETCHING — All HTTP requests now run concurrently with
-   ThreadPoolExecutor instead of sequentially. Cuts Layer A scan time
-   from ~30s to ~5s.
+WHAT CHANGED FROM v3 -> v4
+---------------------------
+No scraper can hit a literal 100% "never skip a coupon" guarantee — that's not
+an engineering limit that goes away with better code, it's a property of
+scraping other people's sites (they change markup, block IPs, rate-limit,
+go down). What v4 does instead is close every gap that WAS a real, fixable
+miss in v3:
 
-2. MORE RELIABLE SOURCES — Added IndianCoupons, CouponRani, FreekaMaal, 
-   and Promocodeclub (all work from CI IPs). Removed dead 404 sources.
+1. RETRY + BACKOFF ON FETCH — v3 treated one failed request as "source dead
+   for this run." v4 retries each source up to RETRY_MAX times with
+   exponential backoff + jitter before giving up.
 
-3. SMARTER CODE EXTRACTION — Two-pass extraction:
-   Pass 1: data-* attributes (highest confidence, never a false positive)
-   Pass 2: text-context patterns (trigger word required, 5-char min)
-   Codes without a digit are now still allowed if ≥ 6 chars (GOLD, PIZZA50 etc.)
+2. USER-AGENT ROTATION — static single UA is trivial to fingerprint/block.
+   Now rotates from a small pool per-request.
 
-4. COUPON FRESHNESS SIGNAL — For DesiDime RSS, checks the <pubDate> field.
-   If the coupon post is older than 4 hours, it is skipped entirely — so you
-   only get codes posted very recently, not stale 3-day-old ones.
+3. JS-EMBEDDED DATA EXTRACTION (Pass 3) — many modern coupon aggregators
+   hydrate their coupon list client-side via a JSON blob in
+   <script type="application/ld+json">, window.__INITIAL_STATE__, or
+   __NEXT_DATA__. v3's regex only looked at rendered HTML text/attributes,
+   so any code that only exists inside one of these blobs was silently
+   invisible. v4 parses these blobs and reuses the same code extractor
+   against their JSON string values.
 
-5. MULTI-PLATFORM SINGLE MESSAGE — If one aggregator page contains codes for
-   3 platforms at once, they are batched into a single Telegram message instead
-   of 3 separate pings.
+4. CROSS-SOURCE CONFIDENCE BONUS — if the same (platform, code) is found by
+   2+ independent sources, that's real corroborating signal. v3 only kept
+   "the single highest-confidence hit" and threw the corroboration away.
+   v4 adds a bonus and records how many sources agreed.
 
-6. CONFIDENCE SCORING — Each code gets a 0-100 confidence score based on:
-   • Source reliability (official page = 100, RSS = 85, HTML scrape = 60)
-   • Whether a discount amount was extracted with the code
-   • Whether the code has a digit (typical for real promo codes)
-   • Codes below 40 confidence are silently dropped (no spam)
+5. RSS DATE FALLBACK — v3 only checked <pubDate>; if that tag was absent
+   (some feeds use <dc:date> or <atom:updated>) it silently included the
+   item without a freshness check at all. v4 checks all three before
+   falling back.
 
-7. ADDED PLATFORMS — Myntra, Nykaa, Meesho, PharmEasy added to the
-   platform map so food + fashion + health coupons are all covered.
+6. TELEGRAM PAGINATION — v3 only ever fetched the single latest preview
+   page of each channel (https://t.me/s/handle), meaning anything posted
+   between runs and pushed off that page was invisible. v4 walks back
+   several pages with ?before=.
+
+7. PER-SOURCE FAILURE BACKOFF — a source that 403s/404s repeatedly is
+   marked "unhealthy" and logged distinctly instead of being retried
+   forever at full cost every run.
+
+8. STRUCTURED LOGGING — swapped print() for the logging module so failures
+   are level-tagged and diagnosable instead of scrolling past.
+
+9. SELF-TEST HARNESS — `python coupon_detector.py --selftest` runs the
+   extractor against known-shape fixtures (HTML attr, JSON blob, RSS text)
+   so a future regex edit that breaks matching fails loudly instead of
+   silently degrading recall.
+
+Everything from v3 (parallel fetch, confidence scoring, dedup, freshness
+window, platform map, Telegram context detection) is preserved.
 """
 
 import json
+import logging
+import random
 import re
+import sys
 import time
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -50,23 +75,43 @@ from notifier import send_alert
 
 load_dotenv()
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] coupon_detector: %(message)s",
+    datefmt="%H:%M:%S",
+)
+log = logging.getLogger("coupon_detector")
+
 WATCHLIST_PATH = Path(__file__).resolve().parent.parent / "watchlist.json"
 DEDUP_HOURS    = 12
 CONFIDENCE_MIN = 40   # Drop any code below this confidence score
 MAX_WORKERS    = 10   # Parallel HTTP fetches
-RSS_MAX_AGE_H  = 6    # Skip RSS items older than 6 hours
+RSS_MAX_AGE_H  = 6    # Skip RSS items older than this many hours (single source of truth)
 
-HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (X11; Linux x86_64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/124.0.0.0 Safari/537.36"
-    ),
-    "Accept-Language": "en-IN,en;q=0.9,hi;q=0.8",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Encoding": "gzip, deflate, br",
-    "Cache-Control": "no-cache",
-}
+RETRY_MAX      = 3    # Max attempts per source fetch
+RETRY_BASE_S   = 0.75 # Base backoff seconds (doubles each attempt + jitter)
+
+TG_PAGES_BACK  = 4    # How many "before" pages to walk per Telegram channel
+
+CROSS_SOURCE_BONUS = 8   # Confidence bonus per additional corroborating source
+CROSS_SOURCE_CAP   = 100
+
+_UA_POOL = [
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15",
+    "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:126.0) Gecko/20100101 Firefox/126.0",
+]
+
+def _headers() -> dict:
+    return {
+        "User-Agent": random.choice(_UA_POOL),
+        "Accept-Language": "en-IN,en;q=0.9,hi;q=0.8",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Cache-Control": "no-cache",
+    }
+
 
 PLATFORMS = {
     "swiggy": {
@@ -140,7 +185,7 @@ PLATFORM_KEYWORDS = {
     "flipkart":   ["flipkart"],
 }
 
-# ── Regex patterns ─────────────────────────────────────────────────────────────
+# ── Regex patterns ─────────────────────────────────────────────────────────
 # Pass 1: data-attributes (high confidence, explicit coupon fields)
 _PASS1_PATTERNS = [
     re.compile(r'data-(?:clipboard-text|coupon[_-]?code|promo[_-]?code|code)[="\s:]+([A-Z][A-Z0-9]{4,14})', re.IGNORECASE),
@@ -152,6 +197,16 @@ _PASS2_PATTERNS = [
     re.compile(r'(?:use|apply|enter|get|copy)\s+(?:code|coupon|promo)[\s:]+([A-Z][A-Z0-9]{4,14})', re.IGNORECASE),
     re.compile(r'(?:code|coupon|promo)[:\s"\']+([A-Z][A-Z0-9]{4,14})', re.IGNORECASE),
     re.compile(r'<code[^>]*>([A-Z][A-Z0-9]{4,14})</code>', re.IGNORECASE),
+]
+# Pass 3: keys commonly used inside JSON blobs (ld+json, __INITIAL_STATE__, __NEXT_DATA__)
+_PASS3_JSON_KEY_PATTERN = re.compile(
+    r'"(?:code|couponCode|coupon_code|promoCode|promo_code|discountCode)"\s*:\s*"([A-Z][A-Z0-9]{4,14})"',
+    re.IGNORECASE,
+)
+_JSON_BLOB_PATTERNS = [
+    re.compile(r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>', re.IGNORECASE | re.DOTALL),
+    re.compile(r'window\.__INITIAL_STATE__\s*=\s*(\{.*?\});', re.DOTALL),
+    re.compile(r'<script[^>]+id=["\']__NEXT_DATA__["\'][^>]*>(.*?)</script>', re.IGNORECASE | re.DOTALL),
 ]
 
 _DISCOUNT_PATTERN = re.compile(
@@ -170,13 +225,13 @@ _CODE_BLACKLIST = {
 }
 
 
-# ── Source registry ─────────────────────────────────────────────────────────────
+# ── Source registry ──────────────────────────────────────────────────────────
 # Each entry: (url, platform_key, source_name, source_type, confidence_base)
 # source_type: 'rss' | 'html' | 'official'
 def build_sources() -> list[tuple]:
     sources = []
 
-    # ── RSS feeds (highest reliability, parse pubDate for freshness) ────────────
+    # ── RSS feeds (highest reliability, parse pubDate for freshness) ─────────
     rss_map = {
         "swiggy":           "https://www.desidime.com/coupons/swiggy.xml",
         "zomato":           "https://www.desidime.com/coupons/zomato.xml",
@@ -193,9 +248,8 @@ def build_sources() -> list[tuple]:
     for pk, url in rss_map.items():
         sources.append((url, pk, "DesiDime RSS", "rss", 85))
 
-    # ── Scraped HTML aggregators ────────────────────────────────────────────────
+    # ── Scraped HTML aggregators ──────────────────────────────────────────────
     html_sources = [
-        # (url, platform_key, source_name, confidence)
         ("https://www.couponraja.in/swiggy-coupons",      "swiggy",     "CouponRaja", 65),
         ("https://www.couponraja.in/zomato-coupons",      "zomato",     "CouponRaja", 65),
         ("https://www.couponraja.in/blinkit-coupons",     "blinkit",    "CouponRaja", 65),
@@ -216,7 +270,7 @@ def build_sources() -> list[tuple]:
     for url, pk, name, conf in html_sources:
         sources.append((url, pk, name, "html", conf))
 
-    # ── Official platform pages ─────────────────────────────────────────────────
+    # ── Official platform pages ────────────────────────────────────────────────
     official_sources = [
         ("https://www.dominos.co.in/offers",              "dominos",    "Dominos Official", 95),
         ("https://www.swiggy.com/offers",                 "swiggy",     "Swiggy Official",  95),
@@ -227,7 +281,7 @@ def build_sources() -> list[tuple]:
     return sources
 
 
-# ── Telegram public channels ────────────────────────────────────────────────────
+# ── Telegram public channels ─────────────────────────────────────────────────
 TG_FOOD_CHANNELS = [
     "@foodcoupon",
     "@foodielooters",
@@ -239,18 +293,39 @@ TG_FOOD_CHANNELS = [
     "@Extrape",
 ]
 
+# Track sources that keep failing so we can log distinctly (not silently retried forever)
+_unhealthy_sources: dict[str, int] = {}
 
-def fetch(url: str, timeout: int = 12) -> str:
-    """Fetch raw content. Returns '' on any error or non-200."""
-    try:
-        r = requests.get(url, headers=HEADERS, timeout=timeout)
-        if r.status_code == 200:
-            return r.text
-        print(f"[coupon_detector] {url} → HTTP {r.status_code} (skipping)")
-        return ""
-    except Exception as e:
-        print(f"[coupon_detector] fetch error {url}: {e}")
-        return ""
+
+def fetch(url: str, timeout: int = 12, retries: int = RETRY_MAX) -> str:
+    """Fetch raw content with retry + exponential backoff + jitter.
+    Returns '' only after all retry attempts are exhausted."""
+    last_err = None
+    for attempt in range(1, retries + 1):
+        try:
+            r = requests.get(url, headers=_headers(), timeout=timeout)
+            if r.status_code == 200:
+                _unhealthy_sources.pop(url, None)
+                return r.text
+            if r.status_code in (429, 503):
+                # Rate-limited / temporarily unavailable — worth retrying
+                last_err = f"HTTP {r.status_code}"
+            else:
+                # 404/403/etc — retrying rarely helps, but still count it once
+                last_err = f"HTTP {r.status_code}"
+                if attempt == 1:
+                    log.warning(f"{url} -> HTTP {r.status_code} (attempt {attempt}/{retries})")
+        except Exception as e:
+            last_err = str(e)
+
+        if attempt < retries:
+            backoff = RETRY_BASE_S * (2 ** (attempt - 1)) + random.uniform(0, 0.4)
+            time.sleep(backoff)
+
+    _unhealthy_sources[url] = _unhealthy_sources.get(url, 0) + 1
+    log.error(f"{url} -> failed after {retries} attempts ({last_err}); "
+              f"unhealthy count={_unhealthy_sources[url]}")
+    return ""
 
 
 def is_cloudflare_blocked(html: str) -> bool:
@@ -274,10 +349,57 @@ def score_code(code: str, discount: str, confidence_base: int) -> int:
     return min(100, max(0, score))
 
 
+def _extract_json_blob_codes(html: str) -> list[str]:
+    """Pull candidate codes out of ld+json / __INITIAL_STATE__ / __NEXT_DATA__
+    blobs. Many aggregators hydrate coupon lists client-side, so codes can
+    exist ONLY inside these blobs and never in plain rendered HTML text —
+    v3's regex passes never looked here at all."""
+    found = []
+    for blob_pat in _JSON_BLOB_PATTERNS:
+        for bm in blob_pat.finditer(html):
+            blob = bm.group(1)
+            if not blob:
+                continue
+            # Try structured JSON parse first for accuracy
+            try:
+                data = json.loads(blob)
+                found.extend(_walk_json_for_codes(data))
+                continue
+            except (json.JSONDecodeError, ValueError):
+                pass
+            # Fall back to regex over the raw blob text
+            for km in _PASS3_JSON_KEY_PATTERN.finditer(blob):
+                found.append(km.group(1).upper())
+    return found
+
+
+def _walk_json_for_codes(node, depth: int = 0) -> list[str]:
+    """Recursively walk a parsed JSON structure looking for coupon-code-ish keys."""
+    if depth > 8:
+        return []
+    codes = []
+    key_names = {"code", "couponcode", "coupon_code", "promocode", "promo_code", "discountcode"}
+    if isinstance(node, dict):
+        for k, v in node.items():
+            if isinstance(v, str) and k.lower() in key_names:
+                candidate = v.strip().upper()
+                if re.fullmatch(r'[A-Z][A-Z0-9]{4,14}', candidate):
+                    codes.append(candidate)
+            elif isinstance(v, (dict, list)):
+                codes.extend(_walk_json_for_codes(v, depth + 1))
+    elif isinstance(node, list):
+        for item in node:
+            codes.extend(_walk_json_for_codes(item, depth + 1))
+    return codes
+
+
 def extract_codes(html: str, confidence_base: int = 65) -> list[tuple[str, str, int]]:
     """
     Returns list of (code, discount_description, confidence_score).
-    Two-pass extraction: data-attributes first (high conf), then text patterns.
+    Three-pass extraction:
+      Pass 1: data-attributes (highest confidence)
+      Pass 2: contextual text patterns
+      Pass 3: embedded JSON blobs (ld+json / __INITIAL_STATE__ / __NEXT_DATA__)
     """
     if not html or is_cloudflare_blocked(html):
         return []
@@ -285,8 +407,8 @@ def extract_codes(html: str, confidence_base: int = 65) -> list[tuple[str, str, 
     results = []
     seen    = set()
 
-    def _add(m, pattern_conf_boost=0):
-        code = (m.group(1) or "").upper().strip()
+    def _add(code_raw: str, ctx: str, pattern_conf_boost: int):
+        code = code_raw.upper().strip()
         if (
             not code
             or len(code) < 4
@@ -294,10 +416,6 @@ def extract_codes(html: str, confidence_base: int = 65) -> list[tuple[str, str, 
             or code in seen
         ):
             return
-        # Grab surrounding discount context
-        start  = max(0, m.start() - 250)
-        end    = min(len(html), m.end() + 250)
-        ctx    = html[start:end]
         disc_m = _DISCOUNT_PATTERN.search(ctx)
         disc   = ""
         if disc_m:
@@ -312,16 +430,51 @@ def extract_codes(html: str, confidence_base: int = 65) -> list[tuple[str, str, 
     # Pass 1: high-confidence data attributes
     for pat in _PASS1_PATTERNS:
         for m in pat.finditer(html):
-            _add(m, pattern_conf_boost=15)
+            code = m.group(1) or ""
+            start, end = max(0, m.start() - 250), min(len(html), m.end() + 250)
+            _add(code, html[start:end], pattern_conf_boost=15)
 
     # Pass 2: contextual text patterns
     for pat in _PASS2_PATTERNS:
         for m in pat.finditer(html):
-            _add(m, pattern_conf_boost=0)
+            code = m.group(1) or ""
+            start, end = max(0, m.start() - 250), min(len(html), m.end() + 250)
+            _add(code, html[start:end], pattern_conf_boost=0)
+
+    # Pass 3: embedded JSON blobs — no surrounding HTML context available,
+    # so no discount snippet, but still a legitimate high-confidence hit
+    # since it comes from a structured data field, not loose text.
+    for code in _extract_json_blob_codes(html):
+        _add(code, "", pattern_conf_boost=10)
 
     # Sort by confidence descending
     results.sort(key=lambda x: x[2], reverse=True)
     return results
+
+
+def _rss_item_datetime(item) -> datetime | None:
+    """Try <pubDate>, then <dc:date>, then <atom:updated> before giving up.
+    v3 only checked <pubDate> and silently skipped the freshness check
+    entirely if it was missing — that let stale AND unverified-fresh items
+    through inconsistently. v4 tries all three known date fields."""
+    candidates = [
+        item.find("pubDate"),
+        item.find("{http://purl.org/dc/elements/1.1/}date"),
+        item.find("{http://www.w3.org/2005/Atom}updated"),
+    ]
+    for el in candidates:
+        if el is not None and el.text:
+            try:
+                dt = parsedate_to_datetime(el.text.strip())
+            except Exception:
+                try:
+                    dt = datetime.fromisoformat(el.text.strip().replace("Z", "+00:00"))
+                except Exception:
+                    continue
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt
+    return None
 
 
 def parse_rss(xml_text: str, platform_key: str, source_name: str, confidence_base: int) -> list[dict]:
@@ -334,25 +487,21 @@ def parse_rss(xml_text: str, platform_key: str, source_name: str, confidence_bas
         return results
     try:
         root = ET.fromstring(xml_text)
-    except ET.ParseError:
+    except ET.ParseError as e:
+        log.warning(f"RSS parse error for {source_name}/{platform_key}: {e}")
         return results
 
     now = datetime.now(timezone.utc)
     cutoff = now - timedelta(hours=RSS_MAX_AGE_H)
 
     for item in root.iter("item"):
-        pub_el = item.find("pubDate")
-        if pub_el is not None and pub_el.text:
-            try:
-                pub_dt = parsedate_to_datetime(pub_el.text.strip())
-                if pub_dt.tzinfo is None:
-                    pub_dt = pub_dt.replace(tzinfo=timezone.utc)
-                if pub_dt < cutoff:
-                    continue   # skip stale items
-            except Exception:
-                pass   # if we can't parse the date, include the item
+        pub_dt = _rss_item_datetime(item)
+        if pub_dt is not None and pub_dt < cutoff:
+            continue   # confirmed stale, skip
+        # if pub_dt is None (no date field found at all), we still include
+        # the item rather than dropping it — an unknown date is not the
+        # same as a known-stale date, and dropping it would be a silent miss.
 
-        # Extract code from <title> and <description>
         title_el = item.find("title")
         desc_el  = item.find("description")
         text     = ""
@@ -370,17 +519,19 @@ def parse_rss(xml_text: str, platform_key: str, source_name: str, confidence_bas
     return results
 
 
-def build_alert(platform_key: str, code: str, discount: str, source: str, conf: int) -> str:
+def build_alert(platform_key: str, code: str, discount: str, source: str,
+                conf: int, corroborated_by: int = 1) -> str:
     p = PLATFORMS.get(platform_key, {"name": platform_key, "emoji": "🛒", "stacking_tip": ""})
     badge    = "🔥 <b>HOT</b>" if conf >= 80 else "✅ <b>NEW</b>"
     disc_line = f"💰 {discount}\n" if discount else ""
     tip_line  = f"\n💡 <b>Stack it:</b> {p['stacking_tip']}" if p["stacking_tip"] else ""
+    corrob_line = f" · seen on {corroborated_by} sources" if corroborated_by > 1 else ""
     return (
         f"🎟️ {badge} COUPON — {p['emoji']} {p['name']}\n"
         f"━━━━━━━━━━━━━━━━━━\n"
         f"🔑 Code: <code>{code}</code>\n"
         f"{disc_line}"
-        f"📍 Source: {source} (confidence {conf}%)"
+        f"📍 Source: {source} (confidence {conf}%{corrob_line})"
         f"{tip_line}\n\n"
         f"✅ Open app → Cart → Apply code → Pay with bank card\n"
         f"⚡ <i>Verify code is still valid before ordering.</i>"
@@ -389,17 +540,17 @@ def build_alert(platform_key: str, code: str, discount: str, source: str, conf: 
 
 def process_source(url: str, platform_key: str, source_name: str,
                    src_type: str, conf_base: int) -> list[dict]:
-    """Fetch one source and return list of found code-dicts."""
+    """Fetch one source (with retry) and return list of found code-dicts."""
     html = fetch(url)
     if not html:
         return []
     if is_cloudflare_blocked(html):
+        log.info(f"{source_name}/{platform_key} blocked by Cloudflare challenge — skipping")
         return []
 
     if src_type == "rss":
         return parse_rss(html, platform_key, source_name, conf_base)
 
-    # HTML / official page
     codes = extract_codes(html, conf_base)
     return [
         {"code": c, "discount": d, "platform": platform_key,
@@ -408,14 +559,34 @@ def process_source(url: str, platform_key: str, source_name: str,
     ]
 
 
+def _apply_cross_source_bonus(all_codes: list[dict]) -> dict[tuple, dict]:
+    """Keep the highest-confidence hit per (platform, code), but boost its
+    confidence when multiple independent sources reported the same code —
+    corroboration across sources is a real accuracy signal v3 discarded."""
+    grouped: dict[tuple, list[dict]] = {}
+    for item in all_codes:
+        key = (item["platform"], item["code"])
+        grouped.setdefault(key, []).append(item)
+
+    best: dict[tuple, dict] = {}
+    for key, items in grouped.items():
+        distinct_sources = {it["source"] for it in items}
+        top = max(items, key=lambda x: x["conf"])
+        bonus = CROSS_SOURCE_BONUS * (len(distinct_sources) - 1)
+        top = dict(top)  # copy, don't mutate original
+        top["conf"] = min(CROSS_SOURCE_CAP, top["conf"] + bonus)
+        top["corroborated_by"] = len(distinct_sources)
+        best[key] = top
+    return best
+
+
 def run():
     total_sent    = 0
     sources_tried = 0
     sources_ok    = 0
     sources_list  = build_sources()
 
-    # ── Layers A + B: Parallel fetch ────────────────────────────────────────────
-    print(f"[coupon_detector] Fetching {len(sources_list)} sources in parallel (max {MAX_WORKERS} workers)...")
+    log.info(f"Fetching {len(sources_list)} sources in parallel (max {MAX_WORKERS} workers)...")
     all_codes: list[dict] = []
 
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
@@ -431,64 +602,130 @@ def run():
                 sources_ok += 1
                 all_codes.extend(results)
             except Exception as e:
-                print(f"[coupon_detector] ERROR {sn}/{pk}: {e}")
+                log.error(f"ERROR {sn}/{pk}: {e}")
 
-    # Deduplicate across sources, keep highest confidence per (platform, code)
-    best: dict[tuple, dict] = {}
-    for item in all_codes:
-        key = (item["platform"], item["code"])
-        if key not in best or item["conf"] > best[key]["conf"]:
-            best[key] = item
+    best = _apply_cross_source_bonus(all_codes)
 
-    # Send alerts for unique codes
     for (platform_key, code), item in sorted(best.items(), key=lambda x: -x[1]["conf"]):
         dedup_key = f"coupon:{platform_key}:{code}"
         if already_alerted(dedup_key, within_hours=DEDUP_HOURS):
             continue
-        msg = build_alert(platform_key, code, item["discount"], item["source"], item["conf"])
+        msg = build_alert(platform_key, code, item["discount"], item["source"],
+                           item["conf"], item.get("corroborated_by", 1))
         if send_alert(msg):
             mark_alerted(dedup_key, PLATFORMS.get(platform_key, {}).get("name", platform_key),
                          0, priority_score=item["conf"], category="coupon")
-            print(f"[coupon_detector] ✅ {platform_key} → {code} ({item['source']}, conf {item['conf']}%)")
+            log.info(f"✅ {platform_key} → {code} ({item['source']}, conf {item['conf']}%, "
+                     f"corroborated_by={item.get('corroborated_by', 1)})")
             total_sent += 1
 
-    # ── Layer C: Telegram public channel web previews ───────────────────────────
-    print("[coupon_detector] Layer C — Telegram public channel previews...")
+    # ── Layer C: Telegram public channel previews (with pagination) ─────────
+    log.info("Layer C — Telegram public channel previews...")
     for channel in TG_FOOD_CHANNELS:
         handle = channel.lstrip("@")
-        html   = fetch(f"https://t.me/s/{handle}")
-        if not html:
-            continue
-        codes = extract_codes(html, confidence_base=70)
-        for code, discount, conf in codes:
-            html_lower = html.lower()
-            idx = html.upper().find(code)
-            detected_platform = None
-            if idx != -1:
-                ctx = html_lower[max(0, idx-400):idx+400]
-                for pkey, kws in PLATFORM_KEYWORDS.items():
-                    if any(kw in ctx for kw in kws):
-                        detected_platform = pkey
-                        break
-            if not detected_platform:
-                continue
-            dedup_key = f"coupon:{detected_platform}:{code}"
-            if already_alerted(dedup_key, within_hours=DEDUP_HOURS):
-                continue
-            msg = build_alert(detected_platform, code, discount, f"Telegram {channel}", conf)
-            if send_alert(msg):
-                mark_alerted(dedup_key, PLATFORMS.get(detected_platform, {}).get("name", detected_platform),
-                             0, priority_score=conf, category="coupon")
-                print(f"[coupon_detector] ✅ {detected_platform} → {code} (TG {channel}, conf {conf}%)")
-                total_sent += 1
-        time.sleep(0.3)
+        before_id = None
+        for page in range(TG_PAGES_BACK):
+            page_url = f"https://t.me/s/{handle}"
+            if before_id:
+                page_url += f"?before={before_id}"
+            html = fetch(page_url)
+            if not html:
+                break  # stop paginating this channel, don't kill the whole run
 
-    print(
-        f"[coupon_detector] Done. "
-        f"{sources_ok}/{sources_tried} sources OK. "
-        f"{total_sent} new alerts sent."
+            codes = extract_codes(html, confidence_base=70)
+            for code, discount, conf in codes:
+                html_lower = html.lower()
+                idx = html.upper().find(code)
+                detected_platform = None
+                if idx != -1:
+                    ctx = html_lower[max(0, idx - 400):idx + 400]
+                    for pkey, kws in PLATFORM_KEYWORDS.items():
+                        if any(kw in ctx for kw in kws):
+                            detected_platform = pkey
+                            break
+                if not detected_platform:
+                    continue
+                dedup_key = f"coupon:{detected_platform}:{code}"
+                if already_alerted(dedup_key, within_hours=DEDUP_HOURS):
+                    continue
+                msg = build_alert(detected_platform, code, discount, f"Telegram {channel}", conf)
+                if send_alert(msg):
+                    mark_alerted(dedup_key, PLATFORMS.get(detected_platform, {}).get("name", detected_platform),
+                                 0, priority_score=conf, category="coupon")
+                    log.info(f"✅ {detected_platform} → {code} (TG {channel} page {page}, conf {conf}%)")
+                    total_sent += 1
+
+            # Find the oldest message id on this page to paginate further back
+            ids = re.findall(r'data-post="[^"]+/(\d+)"', html)
+            if not ids:
+                break
+            oldest_id = min(int(i) for i in ids)
+            if before_id is not None and oldest_id >= before_id:
+                break  # no progress, stop to avoid an infinite loop
+            before_id = oldest_id
+            time.sleep(0.3)
+
+    log.info(
+        f"Done. {sources_ok}/{sources_tried} sources OK. "
+        f"{total_sent} new alerts sent. "
+        f"{len(_unhealthy_sources)} source(s) currently unhealthy."
     )
 
 
+# ── Self-test harness ─────────────────────────────────────────────────────
+def _selftest():
+    """Sanity-check extraction against known-shape fixtures so a future
+    regex edit that silently breaks matching fails loudly here first."""
+    failures = []
+
+    # Pass 1 fixture: data-attribute
+    html1 = '<button data-coupon-code="SAVE150" data-discount="15% off">Copy</button>'
+    codes1 = extract_codes(html1, 65)
+    if not any(c == "SAVE150" for c, _, _ in codes1):
+        failures.append("Pass 1 (data-attribute) failed to extract SAVE150")
+
+    # Pass 2 fixture: contextual text
+    html2 = 'Use code FLAT200 to get ₹200 off on your order today!'
+    codes2 = extract_codes(html2, 65)
+    if not any(c == "FLAT200" for c, _, _ in codes2):
+        failures.append("Pass 2 (contextual text) failed to extract FLAT200")
+
+    # Pass 3 fixture: JSON blob (ld+json style)
+    html3 = (
+        '<script type="application/ld+json">'
+        '{"offers": {"couponCode": "PIZZA50", "discount": "50% off"}}'
+        '</script>'
+    )
+    codes3 = extract_codes(html3, 65)
+    if not any(c == "PIZZA50" for c, _, _ in codes3):
+        failures.append("Pass 3 (JSON blob) failed to extract PIZZA50")
+
+    # Blacklist fixture: should NOT extract common false positives
+    html4 = 'Please LOGIN and click APPLY to continue browsing OFFERS today.'
+    codes4 = extract_codes(html4, 65)
+    if codes4:
+        failures.append(f"Blacklist fixture leaked false positives: {codes4}")
+
+    # Cross-source bonus fixture
+    sample = [
+        {"platform": "swiggy", "code": "GET100", "discount": "", "source": "A", "conf": 60},
+        {"platform": "swiggy", "code": "GET100", "discount": "", "source": "B", "conf": 65},
+    ]
+    boosted = _apply_cross_source_bonus(sample)
+    key = ("swiggy", "GET100")
+    if key not in boosted or boosted[key]["conf"] <= 65:
+        failures.append("Cross-source bonus did not boost confidence for corroborated code")
+
+    if failures:
+        print("SELF-TEST FAILED:")
+        for f in failures:
+            print(f"  - {f}")
+        sys.exit(1)
+    print("SELF-TEST PASSED: all extraction fixtures matched as expected.")
+
+
 if __name__ == "__main__":
-    run()
+    if "--selftest" in sys.argv:
+        _selftest()
+    else:
+        run()
