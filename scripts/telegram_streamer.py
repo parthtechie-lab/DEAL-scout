@@ -34,8 +34,8 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
-    # Use Flash for speed
-    model = genai.GenerativeModel("gemini-1.5-flash")
+    # Use Gemini 2.5 Flash as supported
+    model = genai.GenerativeModel("gemini-2.5-flash")
 else:
     model = None
 
