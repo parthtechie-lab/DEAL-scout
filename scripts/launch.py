@@ -18,13 +18,21 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import web_deal_monitor
+import telegram_streamer
 
 async def main():
     print("=" * 60)
-    print("🚀 DEAL SCOUT — WEB AI SCRAPER LAUNCHING")
+    print("🚀 DEAL SCOUT — DUAL ENGINE LAUNCHING")
+    print("=" * 60)
+    print("  Engine 1: Telegram Real-Time AI Streamer (0s latency)")
+    print("  Engine 2: Advanced Web AI Scraper (15s latency)")
     print("=" * 60)
 
-    await web_deal_monitor.run_forever()
+    # Run both engines concurrently forever
+    await asyncio.gather(
+        telegram_streamer.main(),
+        web_deal_monitor.run_forever(),
+    )
 
 if __name__ == "__main__":
     try:
