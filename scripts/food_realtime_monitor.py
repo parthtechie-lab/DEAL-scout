@@ -39,11 +39,17 @@ HEADERS = {
 }
 
 FOOD_KEYWORDS = [
-    "swiggy", "swigy", "zomato", "dominos", "dominoes", "domino's", "blinkit", "blinkt", "zepto",
-    "jiomart", "jio mart", "bigbasket", "bb", "instamart", "instamrt", "dunzo", "swiggy instamart",
+    "swiggy", "swigy", "swiggy one", "swiggy instamart", "instamart", "instamrt",
+    "zomato", "zomto", "zomato gold", 
+    "dominos", "dominoes", "domino's",
+    "blinkit", "blinkt", "grofers", 
+    "zepto", "zepto pass", 
+    "jiomart", "jio mart", "smart bazaar",
+    "bigbasket", "big basket", "bb", "bbnow", "bbdaily",
+    "dunzo", "dunzo daily", "magicpin", "ondc", "eats",
     "food coupon", "food offer", "delivery free", "cashback",
     "off on", "flat ₹", "flat rs", "promo code", "coupon code",
-    "free delivery", "50% off", "60% off", "70% off"
+    "free delivery", "50% off", "60% off", "70% off", "trynew"
 ]
 
 REJECT_KEYWORDS = [
