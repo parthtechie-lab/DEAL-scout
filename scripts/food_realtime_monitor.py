@@ -39,8 +39,8 @@ HEADERS = {
 }
 
 FOOD_KEYWORDS = [
-    "swiggy", "zomato", "dominos", "dominoes", "blinkit", "zepto",
-    "jiomart", "bigbasket", "instamart", "dunzo", "swiggy instamart",
+    "swiggy", "swigy", "zomato", "dominos", "dominoes", "domino's", "blinkit", "blinkt", "zepto",
+    "jiomart", "jio mart", "bigbasket", "bb", "instamart", "instamrt", "dunzo", "swiggy instamart",
     "food coupon", "food offer", "delivery free", "cashback",
     "off on", "flat ₹", "flat rs", "promo code", "coupon code",
     "free delivery", "50% off", "60% off", "70% off"

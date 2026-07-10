@@ -82,7 +82,7 @@ async def extract_deal_ai(text: str) -> dict:
     
     ✅ ALLOWED CATEGORIES:
     1. ELECTRONICS / GADGETS: Earphones, headphones, speakers, Bluetooth devices, smartwatches, power banks, USB hubs, routers, SSDs, RAM, keyboards, mice, monitors, webcams, cables, adapters, hacking tools, pen drives, hard drives, laptops, mobile phones, tablets.
-    2. FOOD & GROCERY COUPONS: ANY discount/coupon/offer on Dominos, Swiggy, Zomato, Swiggy Instamart, Blinkit, JioMart, BigBasket, Zepto, Dunzo. Only Indian food delivery/grocery apps.
+    2. FOOD & GROCERY COUPONS: ANY discount/coupon/offer on Dominos (or Domino's), Swiggy (or Swigy), Zomato, Swiggy Instamart (or Instamrt), Blinkit (or Blinkt), JioMart (or Jio mart), BigBasket (or BB), Zepto, Dunzo. Only Indian food delivery/grocery apps. Handles common spelling variations and abbreviations.
     3. FASHION / APPAREL: T-shirts, shirts, lower, shorts, jeans, trousers, shoes, sneakers, sandals, clothing.
     4. DRY FRUITS & HEALTH: Almonds, cashews, walnuts, peanuts, raisins, dates, protein powder, whey protein, mass gainer, pre-workout supplements.
     
