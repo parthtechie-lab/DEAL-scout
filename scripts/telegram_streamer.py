@@ -96,7 +96,7 @@ async def extract_deal_ai(text: str) -> dict:
     - Any non-Indian food platform (international apps)
     - Discussion posts, news, complaints, commentary
     - Anything vague where price/product is unclear
-    - ANY coupon or discount that is LESS than ₹150 (if a discount amount is mentioned, it MUST be at least 150 Rs)
+    - ANY coupon or discount that is LESS than ₹100 (if a discount amount is mentioned, it MUST be at least 100 Rs)
 
     Message:
     "{text}"

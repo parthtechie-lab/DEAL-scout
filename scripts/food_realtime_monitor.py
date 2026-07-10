@@ -85,7 +85,7 @@ def is_food_deal(text: str) -> bool:
     if not any(k in t for k in FOOD_KEYWORDS):
         return False
         
-    # Enforce minimum Rs 150 discount for coupons
+    # Enforce minimum Rs 100 discount for coupons
     # Look for "Rs X off", "₹X discount", etc.
     amounts = re.findall(r'(?:rs\.?|inr|₹|flat)\s*(\d+)', t)
     amounts += re.findall(r'(\d+)\s*(?:rs\.?|inr|₹|off|cashback|discount)', t)
@@ -102,10 +102,10 @@ def is_food_deal(text: str) -> bool:
             pass
             
     if valid_amounts:
-        # If we extracted discount numbers, ALL of them must not be under 150.
-        # If at least ONE is >= 150, we accept it.
-        if not any(val >= 150 for val in valid_amounts):
-            return False # Reject because all explicitly mentioned Rs discounts are < 150
+        # If we extracted discount numbers, ALL of them must not be under 100.
+        # If at least ONE is >= 100, we accept it.
+        if not any(val >= 100 for val in valid_amounts):
+            return False # Reject because all explicitly mentioned Rs discounts are < 100
             
     return True
 
