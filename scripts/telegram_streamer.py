@@ -67,13 +67,12 @@ async def unshorten_url(url: str) -> str:
     except Exception:
         return url # fallback to original
 
-async def extract_deal_ai(text: str) -> dict:
+async def extract_deal_ai(text: str, _retry: int = 0) -> dict:
     """
     Sends the message to Gemini to semantically parse the deal.
-    Expects a strict JSON response.
+    Automatically retries on quota exceeded errors (free tier: 15 req/min).
     """
     if not model:
-        print("[WARNING] No GEMINI_API_KEY found. Skipping AI parsing.")
         return {"is_deal": False}
 
     prompt = f"""
@@ -114,7 +113,6 @@ async def extract_deal_ai(text: str) -> dict:
     """
     
     try:
-        # We wrap in asyncio.to_thread because the genai call is currently synchronous
         response = await asyncio.to_thread(
             model.generate_content,
             prompt,
@@ -122,8 +120,63 @@ async def extract_deal_ai(text: str) -> dict:
         )
         return json.loads(response.text)
     except Exception as e:
-        print(f"[AI Parsing Error]: {e}")
+        err = str(e)
+        # Auto-retry on Gemini quota exceeded (free tier: 15 req/min)
+        if ("quota" in err.lower() or "429" in err or "retry" in err.lower()) and _retry < 5:
+            # Extract retry delay from error message, default to 60s
+            match = re.search(r'retry_delay\s*\{\s*seconds:\s*(\d+)', err)
+            wait = int(match.group(1)) + 2 if match else 65
+            print(f"[Gemini] Quota hit — waiting {wait}s before retry...")
+            await asyncio.sleep(wait)
+            return await extract_deal_ai(text, _retry + 1)
         return {"is_deal": False}
+
+async def catch_up_missed_messages(client, watched_channels):
+    """On startup, scan the last 30 minutes of messages from all channels so we never miss deals."""
+    print("[Telegram] Running startup catch-up scan (last 30 min)...")
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=30)
+    caught = 0
+    for handle in watched_channels:
+        try:
+            msgs = await client.get_messages(handle, limit=10)
+            for m in msgs:
+                if not m.text:
+                    continue
+                msg_time = m.date.replace(tzinfo=timezone.utc) if m.date.tzinfo is None else m.date
+                if msg_time < cutoff:
+                    continue
+                dedup_key = f"ai_deal:{handle}:{m.id}"
+                if already_alerted(dedup_key):
+                    continue
+                deal_info = await extract_deal_ai(m.text)
+                score = deal_info.get("priority_score", 0)
+                min_score = int(os.getenv("MIN_PRIORITY_SCORE", 35))
+                if not deal_info.get("is_deal") or score < min_score:
+                    continue
+                product = deal_info.get("product_name", "Unknown")
+                price = deal_info.get("price")
+                coupon = deal_info.get("coupon_code", "")
+                instructions = deal_info.get("instructions", "")
+                category = deal_info.get("category", "general")
+                sent = send_deal_alert(
+                    title=f"🤖 AI DEAL — {product}",
+                    body=f"{m.text}\n\n<b>AI Instructions:</b> {instructions}",
+                    channel=f"@{handle}",
+                    category=category,
+                    coupon_code=coupon,
+                    price=price,
+                    discount_pct=None,
+                    priority_score=score,
+                    action_steps=[instructions] if instructions else []
+                )
+                if sent:
+                    mark_alerted(dedup_key, product, price or 0, priority_score=score, category=category)
+                    caught += 1
+                    print(f"[Catch-up] Sent: {product} (score={score})")
+                await asyncio.sleep(4)  # Pace Gemini calls — stay under quota
+        except Exception:
+            pass
+    print(f"[Telegram] Catch-up complete. Sent {caught} missed deals.")
 
 async def main():
     if not API_ID:
@@ -228,6 +281,8 @@ async def main():
             await client.start()
             print("[Telegram] Streamer online. Waiting for real-time deals...")
             retry_delay = 30  # Reset on successful connect
+            # Immediately process any deals posted in the last 30 min that we missed
+            await catch_up_missed_messages(client, watched_channels)
             await client.run_until_disconnected()
             print("[Telegram] Disconnected. Reconnecting in 30s...")
 
