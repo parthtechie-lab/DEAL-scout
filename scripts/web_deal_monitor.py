@@ -67,7 +67,7 @@ async def extract_deal_ai(text: str) -> dict:
     
     ✅ ALLOWED CATEGORIES:
     1. ELECTRONICS / GADGETS: Earphones, headphones, speakers, Bluetooth devices, smartwatches, power banks, USB hubs, routers, SSDs, RAM, keyboards, mice, monitors, webcams, cables, adapters, hacking tools, pen drives, hard drives, laptops, mobile phones, tablets.
-    2. FOOD & GROCERY COUPONS: ANY discount/coupon/offer on Dominos, Swiggy, Zomato, Instamart, Blinkit, JioMart, BigBasket, Zepto, Dunzo, Magicpin, ONDC. ALSO INCLUDE generic food coupons (e.g. "50% off your next meal", "discount on groceries", "dining offers") even if the specific platform is not named. Accept ALL food discounts, even ₹10 off.
+    2. COUPONS & DISCOUNTS: ANY discount, coupon code, or promo offer for ANY platform (Amazon, Flipkart, Myntra, Swiggy, Zomato, Dominos, BookMyShow, Paytm, PhonePe, Google Pay, etc). Accept ALL coupons and discount codes, even if the category is not electronics/fashion.
     3. FASHION / APPAREL: T-shirts, shirts, lower, shorts, jeans, trousers, shoes, sneakers, sandals, clothing.
     4. DRY FRUITS & HEALTH: Almonds, cashews, walnuts, peanuts, raisins, dates, protein powder, whey protein, mass gainer, pre-workout supplements.
     
