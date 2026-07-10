@@ -49,7 +49,8 @@ FOOD_KEYWORDS = [
     "dunzo", "dunzo daily", "magicpin", "ondc", "eats",
     "food coupon", "food offer", "delivery free", "cashback",
     "off on", "flat ₹", "flat rs", "promo code", "coupon code",
-    "free delivery", "50% off", "60% off", "70% off", "trynew"
+    "free delivery", "50% off", "60% off", "70% off", "trynew",
+    "grocery", "groceries", "meal", "dining", "restaurant", "snack", "beverage", "food delivery"
 ]
 
 REJECT_KEYWORDS = [
