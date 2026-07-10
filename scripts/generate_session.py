@@ -27,9 +27,21 @@ import asyncio
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
 
-with TelegramClient(StringSession(), int(API_ID), API_HASH, loop=loop) as client:
-    client.start(phone="+919770108442")
-    session_string = client.session.save()
-    print("\n=== COPY THIS INTO .env as TELEGRAM_SESSION and into your GitHub Secret ===\n")
-    print(session_string)
-    print("\n=== Do not share this string with anyone or commit it to git ===\n")
+session_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "deal_scout")
+
+with TelegramClient(
+    session_file, 
+    int(API_ID), 
+    API_HASH, 
+    loop=loop,
+    device_model="iPhone 15 Pro Max",
+    system_version="iOS 17.5.1",
+    app_version="10.14.1",
+    lang_code="en",
+    system_lang_code="en-US"
+) as client:
+    client.start() # Interactive login
+    print("\n=== SUCCESS: PERMANENT SESSION FILE CREATED ===")
+    print("A file named 'deal_scout.session' has been created in your folder.")
+    print("Telegram will no longer revoke your session because it is stored securely on your hard drive.")
+    print("You don't need to copy any strings. Just start the bot!\n")

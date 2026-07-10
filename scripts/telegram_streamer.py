@@ -125,15 +125,28 @@ async def extract_deal_ai(text: str) -> dict:
         return {"is_deal": False}
 
 async def main():
-    if not API_ID or not SESSION_STRING:
-        print("Missing TELEGRAM_API_ID or TELEGRAM_SESSION. Exiting.")
+    if not API_ID:
+        print("Missing TELEGRAM_API_ID. Exiting.")
         return
 
     init_db()
     watched_channels = load_watched_channels()
     print(f"[*] Starting AI Real-Time Streamer. Listening to {len(watched_channels)} channels...")
 
-    client = TelegramClient(StringSession(SESSION_STRING), int(API_ID), API_HASH)
+    # Using a permanent file-based session instead of a fragile string
+    session_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "deal_scout")
+    
+    # Crucial: Mimic official iOS app to prevent instant session revocation
+    client = TelegramClient(
+        session_file, 
+        int(API_ID), 
+        API_HASH,
+        device_model="iPhone 15 Pro Max",
+        system_version="iOS 17.5.1",
+        app_version="10.14.1",
+        lang_code="en",
+        system_lang_code="en-US"
+    )
 
     @client.on(events.NewMessage)
     async def handler(event):
