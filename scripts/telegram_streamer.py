@@ -127,17 +127,15 @@ async def extract_deal_ai(text: str) -> dict:
 
 async def main():
     if not API_ID:
-        print("Missing TELEGRAM_API_ID. Exiting.")
+        print("[Telegram] Missing TELEGRAM_API_ID. Exiting.")
         return
 
     init_db()
     watched_channels = load_watched_channels()
-    print(f"[*] Starting AI Real-Time Streamer. Listening to {len(watched_channels)} channels...")
+    print(f"[Telegram] Starting AI Real-Time Streamer. Listening to {len(watched_channels)} channels...")
 
-    # Using a permanent file-based session instead of a fragile string
     session_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "deal_scout")
     
-    # Crucial: Mimic official iOS app to prevent instant session revocation
     client = TelegramClient(
         session_file, 
         int(API_ID), 
@@ -156,7 +154,6 @@ async def main():
         if not event.chat:
             return
             
-        # Get chat handle to verify it's in our watchlist
         chat_handle = getattr(event.chat, "username", "").lower() if hasattr(event.chat, "username") else ""
         if not chat_handle or chat_handle not in watched_channels:
             return
@@ -176,14 +173,12 @@ async def main():
         deal_info = await extract_deal_ai(text)
         
         if not deal_info.get("is_deal"):
-            print(" -> AI determined this is not a valid deal or noise. Skipping.")
             return
 
         # 2. Filtering
-        min_score = int(os.getenv("MIN_PRIORITY_SCORE", 85))
+        min_score = int(os.getenv("MIN_PRIORITY_SCORE", 35))
         score = deal_info.get("priority_score", 0)
         if score < min_score:
-            print(f" -> AI scored this a {score}/100 (Threshold: {min_score}). Average deal. Skipping.")
             return
 
         # 3. Deduplication
@@ -223,12 +218,47 @@ async def main():
             mark_alerted(dedup_key, product, price or 0, priority_score=score, category=category)
             print(f" -> Successfully alerted: {product} (Score {score})")
 
-    await client.start()
-    print("[*] Streamer online. Waiting for real-time deals... (Press Ctrl+C to stop)")
-    await client.run_until_disconnected()
+    # ── SELF-HEALING RECONNECT LOOP ──────────────────────────────────────────
+    # Never gives up. If Telegram disconnects for any reason, it waits and retries.
+    retry_delay = 30  # seconds
+    max_retry_delay = 600  # max 10 minutes between retries
+
+    while True:
+        try:
+            await client.start()
+            print("[Telegram] Streamer online. Waiting for real-time deals...")
+            retry_delay = 30  # Reset on successful connect
+            await client.run_until_disconnected()
+            print("[Telegram] Disconnected. Reconnecting in 30s...")
+
+        except ConnectionError as e:
+            print(f"[Telegram] Connection error: {e}. Retrying in {retry_delay}s...")
+        except Exception as e:
+            err = str(e)
+            # Handle Telegram FloodWait — must wait exactly as long as Telegram says
+            if "FloodWait" in err or "flood" in err.lower():
+                import re as _re
+                match = _re.search(r'(\d+)', err)
+                wait = int(match.group(1)) + 5 if match else 60
+                print(f"[Telegram] FloodWait — waiting {wait}s as required by Telegram...")
+                await asyncio.sleep(wait)
+                continue
+            # Handle session/auth errors — notify user and stop (can't auto-fix)
+            if "auth" in err.lower() or "session" in err.lower() or "password" in err.lower():
+                print(f"[Telegram] FATAL: Auth error — {e}. Session may be revoked.")
+                try:
+                    from notifier import send_alert
+                    send_alert("🔴 <b>TELEGRAM ENGINE DOWN</b>\nSession was revoked by Telegram. Please run <code>scripts/generate_session.py</code> to log in again.", force=True)
+                except Exception:
+                    pass
+                return  # Stop this engine — can't recover without user action
+            print(f"[Telegram] Unexpected error: {e}. Retrying in {retry_delay}s...")
+
+        await asyncio.sleep(retry_delay)
+        retry_delay = min(retry_delay * 2, max_retry_delay)  # Exponential backoff
 
 if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print("\n[*] Streamer stopped by user. Shutting down gracefully.")
+        print("\n[Telegram] Stopped by user.")

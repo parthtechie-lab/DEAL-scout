@@ -25,6 +25,11 @@ from notifier import send_deal_alert
 load_dotenv()
 
 SCAN_INTERVAL_SECONDS = 300  # Scan every 5 minutes to avoid IP bans
+MAX_BACKOFF_SECONDS = 3600   # Max 1 hour backoff on repeated failures
+
+# Per-source failure tracking for exponential backoff
+source_failures = {"reddit": 0, "desidime": 0}
+source_next_scan = {"reddit": 0, "desidime": 0}  # epoch timestamps
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
@@ -157,19 +162,24 @@ async def process_post(source: str, dedup_id: str, title: str, body: str, link: 
 # ─── SCRAPERS ─────────────────────────────────────────────────────────────────
 
 async def scrape_reddit(session: aiohttp.ClientSession):
+    now = asyncio.get_event_loop().time()
+    if now < source_next_scan["reddit"]:
+        return  # Still in backoff period
     subs = ["indianshoppingdeals", "dealsforindia", "CouponsIndia", "Lootdealsforindia"]
     found = 0
+    had_error = False
     for sub in subs:
         try:
             url = f"https://www.reddit.com/r/{sub}/new.json?limit=15"
             async with session.get(url, headers=REDDIT_HEADERS, timeout=15) as r:
                 if r.status != 200:
-                    continue  # Silently skip blocked subreddits
+                    had_error = True
+                    continue
                 data = await r.json()
                 for post in data.get("data", {}).get("children", []):
                     d = post.get("data", {})
                     age = datetime.now(timezone.utc).timestamp() - d.get("created_utc", 0)
-                    if age > 1800:  # Ignore posts older than 30 mins
+                    if age > 1800:
                         continue
                     found += 1
                     await process_post(
@@ -179,18 +189,27 @@ async def scrape_reddit(session: aiohttp.ClientSession):
                         body=d.get("selftext", ""),
                         link=f"https://reddit.com{d.get('permalink','')}"
                     )
-            await asyncio.sleep(2)  # Small delay between subreddits to be polite
+            await asyncio.sleep(2)
         except Exception:
-            pass  # Silently skip any Reddit errors
+            had_error = True
+    if had_error:
+        source_failures["reddit"] += 1
+        backoff = min(SCAN_INTERVAL_SECONDS * (2 ** source_failures["reddit"]), MAX_BACKOFF_SECONDS)
+        source_next_scan["reddit"] = asyncio.get_event_loop().time() + backoff
+    else:
+        source_failures["reddit"] = 0  # Reset on success
     if found > 0:
-        print(f"[Web Scraper] Reddit: {found} fresh posts found")
+        print(f"[Web Scraper] Reddit: {found} fresh posts processed")
 
 async def scrape_desidime(session: aiohttp.ClientSession):
+    now = asyncio.get_event_loop().time()
+    if now < source_next_scan["desidime"]:
+        return  # Still in backoff period
     try:
         url = "https://www.desidime.com/sdm_data/home_page_deals?page=1"
         async with session.get(url, headers=HEADERS, timeout=10) as r:
             if r.status != 200:
-                return  # Silently skip if Cloudflare blocks
+                raise Exception(f"HTTP {r.status}")
             data = await r.json(content_type=None)
             deals = data if isinstance(data, list) else data.get("deals", [])
             if deals:
@@ -203,8 +222,12 @@ async def scrape_desidime(session: aiohttp.ClientSession):
                     body=deal.get("description", "") or "",
                     link=deal.get("url", "https://www.desidime.com")
                 )
+        source_failures["desidime"] = 0  # Reset on success
     except Exception:
-        pass  # Silently skip all DesiDime errors (Cloudflare blocks, etc.)
+        source_failures["desidime"] += 1
+        backoff = min(SCAN_INTERVAL_SECONDS * (2 ** source_failures["desidime"]), MAX_BACKOFF_SECONDS)
+        source_next_scan["desidime"] = asyncio.get_event_loop().time() + backoff
+        # Silently back off — no error spam
 
 async def scan_all_sources():
     connector = aiohttp.TCPConnector(ssl=False)
