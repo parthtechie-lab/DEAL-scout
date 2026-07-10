@@ -85,28 +85,6 @@ def is_food_deal(text: str) -> bool:
     if not any(k in t for k in FOOD_KEYWORDS):
         return False
         
-    # Enforce minimum Rs 100 discount for coupons
-    # Look for "Rs X off", "₹X discount", etc.
-    amounts = re.findall(r'(?:rs\.?|inr|₹|flat)\s*(\d+)', t)
-    amounts += re.findall(r'(\d+)\s*(?:rs\.?|inr|₹|off|cashback|discount)', t)
-    
-    valid_amounts = []
-    for a in amounts:
-        try:
-            num = int(a)
-            # Ignore numbers that are clearly percentages (like 50 from 50%) or tiny random numbers
-            # If the text has exactly that number followed by %, it's a percentage
-            if f"{num}%" not in t:
-                valid_amounts.append(num)
-        except:
-            pass
-            
-    if valid_amounts:
-        # If we extracted discount numbers, ALL of them must not be under 100.
-        # If at least ONE is >= 100, we accept it.
-        if not any(val >= 100 for val in valid_amounts):
-            return False # Reject because all explicitly mentioned Rs discounts are < 100
-            
     return True
 
 def extract_coupons(text: str) -> list[str]:
