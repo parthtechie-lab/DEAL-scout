@@ -24,7 +24,7 @@ from notifier import send_deal_alert
 
 load_dotenv()
 
-SCAN_INTERVAL_SECONDS = 15  # Aggressive polling
+SCAN_INTERVAL_SECONDS = 300  # Scan every 5 minutes to avoid IP bans
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
@@ -35,10 +35,17 @@ if GEMINI_API_KEY:
 else:
     model = None
 
+# Standard browser headers for DesiDime
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
     "Accept": "application/json, text/html,*/*",
     "Accept-Language": "en-IN,en;q=0.9",
+}
+
+# Reddit requires a very specific User-Agent format or it returns 403
+REDDIT_HEADERS = {
+    "User-Agent": "linux:deal-scout-bot:v2.0 (by /u/dealscout_india)",
+    "Accept": "application/json",
 }
 
 # ─── AI ENGINE ────────────────────────────────────────────────────────────────
@@ -150,20 +157,21 @@ async def process_post(source: str, dedup_id: str, title: str, body: str, link: 
 # ─── SCRAPERS ─────────────────────────────────────────────────────────────────
 
 async def scrape_reddit(session: aiohttp.ClientSession):
-    subs = ["IndiaDeals", "CouponsIndia", "SwiggyDeals", "ZomatoDeals"]
+    subs = ["indianshoppingdeals", "dealsforindia", "CouponsIndia", "Lootdealsforindia"]
+    found = 0
     for sub in subs:
         try:
-            url = f"https://www.reddit.com/r/{sub}/new.json?limit=10"
-            async with session.get(url, headers={**HEADERS, "Accept": "application/json"}, timeout=10) as r:
+            url = f"https://www.reddit.com/r/{sub}/new.json?limit=15"
+            async with session.get(url, headers=REDDIT_HEADERS, timeout=15) as r:
                 if r.status != 200:
-                    continue
+                    continue  # Silently skip blocked subreddits
                 data = await r.json()
                 for post in data.get("data", {}).get("children", []):
                     d = post.get("data", {})
                     age = datetime.now(timezone.utc).timestamp() - d.get("created_utc", 0)
-                    if age > 1800: # Ignore posts older than 30 mins
+                    if age > 1800:  # Ignore posts older than 30 mins
                         continue
-                        
+                    found += 1
                     await process_post(
                         source=f"Reddit/{sub}",
                         dedup_id=d.get("id", ""),
@@ -171,17 +179,22 @@ async def scrape_reddit(session: aiohttp.ClientSession):
                         body=d.get("selftext", ""),
                         link=f"https://reddit.com{d.get('permalink','')}"
                     )
-        except Exception as e:
-            print(f"[Web Scraper] Reddit/{sub} error: {e}")
+            await asyncio.sleep(2)  # Small delay between subreddits to be polite
+        except Exception:
+            pass  # Silently skip any Reddit errors
+    if found > 0:
+        print(f"[Web Scraper] Reddit: {found} fresh posts found")
 
 async def scrape_desidime(session: aiohttp.ClientSession):
     try:
         url = "https://www.desidime.com/sdm_data/home_page_deals?page=1"
         async with session.get(url, headers=HEADERS, timeout=10) as r:
             if r.status != 200:
-                return
+                return  # Silently skip if Cloudflare blocks
             data = await r.json(content_type=None)
             deals = data if isinstance(data, list) else data.get("deals", [])
+            if deals:
+                print(f"[Web Scraper] DesiDime: {len(deals[:10])} deals found")
             for deal in deals[:10]:
                 await process_post(
                     source="DesiDime",
@@ -190,11 +203,10 @@ async def scrape_desidime(session: aiohttp.ClientSession):
                     body=deal.get("description", "") or "",
                     link=deal.get("url", "https://www.desidime.com")
                 )
-    except Exception as e:
-        print(f"[Web Scraper] DesiDime error: {e}")
+    except Exception:
+        pass  # Silently skip all DesiDime errors (Cloudflare blocks, etc.)
 
 async def scan_all_sources():
-    print(f"[Web Scraper] 🔍 Scanning all internet sources for deals...")
     connector = aiohttp.TCPConnector(ssl=False)
     async with aiohttp.ClientSession(connector=connector) as session:
         await asyncio.gather(
@@ -202,17 +214,15 @@ async def scan_all_sources():
             scrape_desidime(session),
             return_exceptions=True
         )
-    print(f"[Web Scraper] ✅ Scan complete. Sleeping for {SCAN_INTERVAL_SECONDS}s.")
 
 async def run_forever():
     init_db()
-    print(f"🚀 ENTERPRISE WEB AI SCRAPER ONLINE")
-    print(f"[*] Aggressively scanning DesiDime & Reddit every {SCAN_INTERVAL_SECONDS}s")
+    print(f"🚀 WEB AI SCRAPER ONLINE — Scanning every {SCAN_INTERVAL_SECONDS // 60} minutes")
     while True:
         try:
             await scan_all_sources()
-        except Exception as e:
-            print(f"[Web Scraper] Loop error: {e}")
+        except Exception:
+            pass  # Never crash — silently continue
         await asyncio.sleep(SCAN_INTERVAL_SECONDS)
 
 if __name__ == "__main__":
