@@ -9,17 +9,27 @@ Pipes incoming messages into Google Gemini for semantic extraction.
 import os
 import json
 import asyncio
-import re
-import aiohttp
 import random
+import aiohttp
+import warnings
+import logging
 from dotenv import load_dotenv
 from datetime import datetime, timezone, timedelta
 
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
 
-import warnings
 warnings.filterwarnings("ignore", category=FutureWarning, module="google.generativeai")
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(name)s] [%(levelname)s] %(message)s",
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler("scout.log")
+    ]
+)
+logger = logging.getLogger("TelegramStreamer")
 
 import google.generativeai as genai
 from google.generativeai.types import generation_types
@@ -298,7 +308,9 @@ async def main():
             print("[Telegram] Disconnected. Reconnecting in 30s...")
 
         except ConnectionError as e:
-            print(f"[Telegram] Connection error: {e}. Retrying in {retry_delay}s...")
+            jitter = random.uniform(0.8, 1.2)
+            retry_delay = min(retry_delay * 1.5 * jitter, max_retry_delay)
+            logger.warning(f"[Telegram] Connection error: {e}. Retrying in {retry_delay:.1f}s...")
         except Exception as e:
             err = str(e)
             # Handle Telegram FloodWait — must wait exactly as long as Telegram says
@@ -306,19 +318,20 @@ async def main():
                 import re as _re
                 match = _re.search(r'(\d+)', err)
                 wait = int(match.group(1)) + 5 if match else 60
-                print(f"[Telegram] FloodWait — waiting {wait}s as required by Telegram...")
+                logger.warning(f"[Telegram] FloodWait — waiting {wait}s as required by Telegram...")
                 await asyncio.sleep(wait)
                 continue
             # Handle session/auth errors — notify user and stop (can't auto-fix)
             if "auth" in err.lower() or "session" in err.lower() or "password" in err.lower():
-                print(f"[Telegram] FATAL: Auth error — {e}. Session may be revoked.")
+                logger.critical(f"[Telegram] FATAL AUTH ERROR: {e}")
                 try:
                     from notifier import send_alert
                     send_alert("🔴 <b>TELEGRAM ENGINE DOWN</b>\nSession was revoked by Telegram. Please run <code>scripts/generate_session.py</code> to log in again.", force=True)
                 except Exception:
                     pass
                 return  # Stop this engine — can't recover without user action
-            print(f"[Telegram] Unexpected error: {e}. Retrying in {retry_delay}s...")
+            logger.error(f"[Telegram] Unexpected error: {e}. Retrying in 30s...")
+            await asyncio.sleep(30)
 
         await asyncio.sleep(retry_delay)
         retry_delay = min(retry_delay * 2, max_retry_delay)  # Exponential backoff

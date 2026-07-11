@@ -11,8 +11,27 @@ independently without killing the other engine.
 import asyncio
 import os
 import sys
-import warnings
-warnings.filterwarnings("ignore")
+import logging
+import traceback
+from colorama import init, Fore
+
+init(autoreset=True)
+
+# Advanced Logging Configuration
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(name)s] [%(levelname)s] %(message)s",
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler("scout.log")
+    ]
+)
+logger = logging.getLogger("Launcher")
+
+def log_fatal_crash(engine_name, exc_text):
+    with open("deal-scout-crash.log", "a") as f:
+        f.write(f"--- FATAL CRASH: {engine_name} ---\n")
+        f.write(exc_text + "\n\n")
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -34,15 +53,18 @@ async def run_with_auto_restart(engine_name: str, engine_func, min_restart_delay
 
     while True:
         try:
-            print(f"[Launcher] ▶ Starting {engine_name}...")
+            logger.info(f"[Launcher] ▶ Starting {engine_name}...")
             await engine_func()
             # If it exits cleanly (no exception), restart anyway
-            print(f"[Launcher] {engine_name} exited cleanly. Restarting in {restart_delay}s...")
+            logger.info(f"[Launcher] {engine_name} exited cleanly. Restarting in {restart_delay}s...")
         except asyncio.CancelledError:
-            print(f"[Launcher] {engine_name} cancelled. Stopping.")
+            logger.info(f"[Launcher] {engine_name} cancelled. Stopping.")
             return  # Don't restart on deliberate cancellation
         except Exception as e:
-            print(f"[Launcher] {engine_name} crashed: {e}. Restarting in {restart_delay}s...")
+            err_msg = traceback.format_exc()
+            logger.error(f"[Launcher] {engine_name} crashed: {e}")
+            log_fatal_crash(engine_name, err_msg)
+            logger.info(f"[Launcher] Restarting {engine_name} in {restart_delay}s...")
 
         await asyncio.sleep(restart_delay)
         restart_delay = min(restart_delay * 2, max_delay)  # Exponential backoff
@@ -51,13 +73,13 @@ async def run_with_auto_restart(engine_name: str, engine_func, min_restart_delay
 
 
 async def main():
-    print("=" * 60)
-    print("🚀 DEAL SCOUT — DUAL ENGINE LAUNCHING (SELF-HEALING)")
-    print("=" * 60)
-    print("  Engine 1: Telegram Real-Time AI Streamer (0s latency)")
-    print("  Engine 2: Advanced Web AI Scraper (5 min interval)")
-    print("  ♻️  Both engines auto-restart if they ever crash")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("🚀 DEAL SCOUT — DUAL ENGINE LAUNCHING (SELF-HEALING)")
+    logger.info("=" * 60)
+    logger.info("  Engine 1: Telegram Real-Time AI Streamer (0s latency)")
+    logger.info("  Engine 2: Advanced Web AI Scraper (5 min interval)")
+    logger.info("  ♻️  Both engines auto-restart if they ever crash")
+    logger.info("=" * 60)
 
     # Run both engines independently — one crash does NOT kill the other
     await asyncio.gather(

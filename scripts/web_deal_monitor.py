@@ -12,8 +12,20 @@ import asyncio
 import aiohttp
 import warnings
 import feedparser
+import random
+import logging
 from datetime import datetime, timezone
 warnings.filterwarnings("ignore", category=FutureWarning, module="google.generativeai")
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(name)s] [%(levelname)s] %(message)s",
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler("scout.log")
+    ]
+)
+logger = logging.getLogger("WebScraper")
 
 import google.generativeai as genai
 from dotenv import load_dotenv
@@ -250,12 +262,15 @@ async def scrape_smartprix(session: aiohttp.ClientSession):
         
     if had_error:
         source_failures["smartprix"] += 1
-        backoff = min(SCAN_INTERVAL_SECONDS * (2 ** source_failures["smartprix"]), MAX_BACKOFF_SECONDS)
+        base_backoff = SCAN_INTERVAL_SECONDS * (2 ** source_failures["smartprix"])
+        jitter = random.uniform(0.8, 1.2)
+        backoff = min(base_backoff * jitter, MAX_BACKOFF_SECONDS)
         source_next_scan["smartprix"] = asyncio.get_event_loop().time() + backoff
+        logger.warning(f"[Web Scraper] SmartPrix RSS encountered an error. Backing off for {backoff:.1f}s (includes jitter)")
     else:
         source_failures["smartprix"] = 0
     if found > 0:
-        print(f"[Web Scraper] SmartPrix RSS: {found} fresh deals processed")
+        logger.info(f"[Web Scraper] SmartPrix RSS: {found} fresh deals processed")
 
 async def scrape_desidime(session: aiohttp.ClientSession):
     now = asyncio.get_event_loop().time()
