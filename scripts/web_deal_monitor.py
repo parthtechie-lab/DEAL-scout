@@ -67,7 +67,7 @@ async def extract_deal_ai(text: str) -> dict:
     
     ✅ ALLOWED CATEGORIES:
     1. ELECTRONICS / GADGETS: Earphones, headphones, speakers, Bluetooth devices, smartwatches, power banks, USB hubs, routers, SSDs, RAM, keyboards, mice, monitors, webcams, cables, adapters, hacking tools, pen drives, hard drives, laptops, mobile phones, tablets.
-    2. COUPONS & DISCOUNTS: ANY discount, coupon code, or promo offer for ANY platform (Amazon, Flipkart, Myntra, Swiggy, Zomato, Dominos, BookMyShow, Paytm, PhonePe, Google Pay, etc). Accept ALL coupons and discount codes, even if the category is not electronics/fashion.
+    2. COUPONS & DISCOUNTS: ANY discount, coupon code, or promo offer for ANY platform (Amazon, Flipkart, Myntra, Swiggy, Zomato, Dominos, BookMyShow, Paytm, PhonePe, Google Pay, etc). Accept ALL coupons and discount codes. **CRITICAL RULE**: If it is a food delivery coupon (Swiggy, Zomato, Dominos, KFC, etc), you MUST assign it a priority_score of 90-100, regardless of the discount amount!
     3. FASHION / APPAREL: T-shirts, shirts, lower, shorts, jeans, trousers, shoes, sneakers, sandals, clothing.
     4. DRY FRUITS & HEALTH: Almonds, cashews, walnuts, peanuts, raisins, dates, protein powder, whey protein, mass gainer, pre-workout supplements.
     
@@ -131,6 +131,15 @@ async def process_post(source: str, dedup_id: str, title: str, body: str, link: 
     min_score = int(os.getenv("MIN_PRIORITY_SCORE", 70))
     score = deal_info.get("priority_score", 0)
     
+    # KEYWORD FAST-TRACK: Instantly boost food/delivery keywords
+    fast_track_keywords = ["swiggy", "zomato", "domino", "eatsure", "magicpin", "kfc", "mcdonald"]
+    text_lower = full_text.lower()
+    if any(kw in text_lower for kw in fast_track_keywords):
+        print(f"[Web Scraper] ⚡ KEYWORD FAST-TRACK: Food keyword detected. Boosting score!")
+        score = max(score, 90) # Force to 90+
+        deal_info["priority_score"] = score
+        deal_info["category"] = "food_coupon"
+
     if score < min_score:
         return
 
