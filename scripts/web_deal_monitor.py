@@ -11,10 +11,11 @@ import json
 import asyncio
 import aiohttp
 import warnings
+import feedparser
+from datetime import datetime, timezone
 warnings.filterwarnings("ignore", category=FutureWarning, module="google.generativeai")
 
 import google.generativeai as genai
-from datetime import datetime, timezone
 from dotenv import load_dotenv
 
 import sys
@@ -24,12 +25,12 @@ from notifier import send_deal_alert
 
 load_dotenv()
 
-SCAN_INTERVAL_SECONDS = 300  # Scan every 5 minutes to avoid IP bans
+SCAN_INTERVAL_SECONDS = 60  # Reduced to 1 min for fast RSS polling
 MAX_BACKOFF_SECONDS = 3600   # Max 1 hour backoff on repeated failures
 
 # Per-source failure tracking for exponential backoff
-source_failures = {"reddit": 0, "desidime": 0}
-source_next_scan = {"reddit": 0, "desidime": 0}  # epoch timestamps
+source_failures = {"reddit": 0, "desidime": 0, "smartprix": 0}
+source_next_scan = {"reddit": 0, "desidime": 0, "smartprix": 0}  # epoch timestamps
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
@@ -179,24 +180,27 @@ async def scrape_reddit(session: aiohttp.ClientSession):
     had_error = False
     for sub in subs:
         try:
-            url = f"https://www.reddit.com/r/{sub}/new.json?limit=15"
+            url = f"https://www.reddit.com/r/{sub}/new.rss"
             async with session.get(url, headers=REDDIT_HEADERS, timeout=15) as r:
                 if r.status != 200:
                     had_error = True
                     continue
-                data = await r.json()
-                for post in data.get("data", {}).get("children", []):
-                    d = post.get("data", {})
-                    age = datetime.now(timezone.utc).timestamp() - d.get("created_utc", 0)
-                    if age > 1800:
-                        continue
+                xml_data = await r.text()
+                feed = feedparser.parse(xml_data)
+                for entry in feed.entries:
+                    import time
+                    if hasattr(entry, 'published_parsed'):
+                        entry_time = time.mktime(entry.published_parsed)
+                        age = datetime.now(timezone.utc).timestamp() - entry_time
+                        if age > 1800:
+                            continue
                     found += 1
                     await process_post(
                         source=f"Reddit/{sub}",
-                        dedup_id=d.get("id", ""),
-                        title=d.get("title", ""),
-                        body=d.get("selftext", ""),
-                        link=f"https://reddit.com{d.get('permalink','')}"
+                        dedup_id=entry.id,
+                        title=entry.title,
+                        body=entry.get('summary', ''),
+                        link=entry.link
                     )
             await asyncio.sleep(2)
         except Exception:
@@ -208,7 +212,50 @@ async def scrape_reddit(session: aiohttp.ClientSession):
     else:
         source_failures["reddit"] = 0  # Reset on success
     if found > 0:
-        print(f"[Web Scraper] Reddit: {found} fresh posts processed")
+        print(f"[Web Scraper] Reddit RSS: {found} fresh posts processed")
+
+async def scrape_smartprix(session: aiohttp.ClientSession):
+    now = asyncio.get_event_loop().time()
+    if now < source_next_scan["smartprix"]:
+        return
+    found = 0
+    had_error = False
+    try:
+        url = "https://www.smartprix.com/bytes/feed/"
+        # SmartPrix blocks default aiohttp agent, so use a real one
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+        async with session.get(url, headers=headers, timeout=15) as r:
+            if r.status != 200:
+                had_error = True
+            else:
+                xml_data = await r.text()
+                feed = feedparser.parse(xml_data)
+                for entry in feed.entries:
+                    import time
+                    if hasattr(entry, 'published_parsed'):
+                        entry_time = time.mktime(entry.published_parsed)
+                        age = datetime.now(timezone.utc).timestamp() - entry_time
+                        if age > 1800:
+                            continue
+                    found += 1
+                    await process_post(
+                        source="SmartPrix",
+                        dedup_id=entry.get('id', entry.link),
+                        title=entry.title,
+                        body=entry.get('summary', ''),
+                        link=entry.link
+                    )
+    except Exception:
+        had_error = True
+        
+    if had_error:
+        source_failures["smartprix"] += 1
+        backoff = min(SCAN_INTERVAL_SECONDS * (2 ** source_failures["smartprix"]), MAX_BACKOFF_SECONDS)
+        source_next_scan["smartprix"] = asyncio.get_event_loop().time() + backoff
+    else:
+        source_failures["smartprix"] = 0
+    if found > 0:
+        print(f"[Web Scraper] SmartPrix RSS: {found} fresh deals processed")
 
 async def scrape_desidime(session: aiohttp.ClientSession):
     now = asyncio.get_event_loop().time()
@@ -243,6 +290,7 @@ async def scan_all_sources():
     async with aiohttp.ClientSession(connector=connector) as session:
         await asyncio.gather(
             scrape_reddit(session),
+            scrape_smartprix(session),
             scrape_desidime(session),
             return_exceptions=True
         )
